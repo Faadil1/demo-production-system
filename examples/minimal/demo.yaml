@@ -1,0 +1,33 @@
+schemaVersion: "0.1"
+
+project:
+  name: TrustCheck
+  repository: https://github.com/example/trustcheck
+  url: http://localhost:3000
+
+product:
+  problem: Agents cannot independently verify whether a claimed action occurred.
+  audience:
+    - hackathon judges
+    - agent developers
+  valueProposition: Produce independently verifiable signed receipts for agent actions.
+  heroInteractionHint: Verify a signed receipt and expose the verification result.
+  evidenceHints:
+    - signed receipt
+    - public verification key
+    - verification result
+
+demo:
+  goal: prove
+  audience: technical judges
+  durationSeconds: 60
+  mode: directed
+  styles:
+    - forensic
+    - technical-proof
+    - hero-interaction
+
+constraints:
+  noGeneratedUI: true
+  minimumEvidenceCount: 3
+  maximumOnScreenWords: 20
