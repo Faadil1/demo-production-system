@@ -1,15 +1,41 @@
-import type { DemoIntermediateRepresentation } from "../core/dir.js";
+import type { DemoIntermediateRepresentation, DIRReadiness, EvidenceReference } from "../core/dir.js";
 import type { DemoManifest } from "../core/manifest.js";
-import type { Understanding } from "./understanding.js";
+import type { ProductUnderstanding } from "../core/product-understanding.js";
 import type { Plan } from "./planning.js";
+
+function readinessFromGateStatus(status: Plan["understandingGateStatus"]): DIRReadiness {
+  switch (status) {
+    case "pass":
+      return "ready";
+    case "conditional":
+      return "conditional";
+    case "fail":
+      return "blocked";
+  }
+}
 
 export function compileDIR(
   manifest: DemoManifest,
-  understanding: Understanding,
+  understanding: ProductUnderstanding,
   plan: Plan,
 ): DemoIntermediateRepresentation {
+  if (plan.understandingGateStatus === "fail") {
+    throw new Error(
+      "DIR compilation refused: the Understanding Gate is in a FAIL state and rendering must not begin.",
+    );
+  }
+
+  const evidence: EvidenceReference[] = understanding.evidence.map((item) => ({
+    id: item.id,
+    kind: item.kind,
+    claim: item.claim,
+    source: item.source,
+    importance: item.importance,
+    verificationStatus: item.verificationStatus,
+  }));
+
   const dir: DemoIntermediateRepresentation = {
-    schemaVersion: "0.1",
+    schemaVersion: "0.2",
     title: plan.title,
     goal: plan.goal,
     audience: plan.audience,
@@ -17,12 +43,13 @@ export function compileDIR(
     heroInteractionSceneId: plan.heroInteractionSceneId,
     acts: plan.acts,
     scenes: plan.scenes,
-    evidence: understanding.evidenceCandidates,
+    evidence,
     constraints: {
       noGeneratedUI: manifest.constraints?.noGeneratedUI ?? true,
-      minimumEvidenceCount: understanding.minimumEvidenceCount,
+      minimumEvidenceCount: understanding.evidenceCoverage.requiredCount,
       maximumOnScreenWords: manifest.constraints?.maximumOnScreenWords ?? 20,
     },
+    readiness: readinessFromGateStatus(plan.understandingGateStatus),
   };
 
   assertDIRInvariants(dir);
@@ -30,6 +57,10 @@ export function compileDIR(
 }
 
 export function assertDIRInvariants(dir: DemoIntermediateRepresentation): void {
+  if (dir.readiness === "blocked") {
+    throw new Error("DIR invariant violated: a blocked DIR must never be produced.");
+  }
+
   const heroScenes = dir.scenes.filter((scene) => scene.isHeroInteraction);
   if (heroScenes.length !== 1) {
     throw new Error(

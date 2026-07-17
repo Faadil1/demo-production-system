@@ -7,7 +7,8 @@ import { EventLog } from "../core/event-log.js";
 import { contentHashOf } from "../core/hash.js";
 import { assertManifest, loadManifestFile, validateManifest, type DemoManifest } from "../core/manifest.js";
 import { FilesystemArtifactRegistry } from "../registry/filesystem-artifact-registry.js";
-import { UnderstandingEngine, type Understanding } from "../engines/understanding.js";
+import { UnderstandingEngine } from "../engines/understanding.js";
+import type { ProductUnderstanding } from "../core/product-understanding.js";
 import { PlanningEngine, type Plan } from "../engines/planning.js";
 import { compileDIR } from "../engines/dir-compiler.js";
 import type { DemoIntermediateRepresentation } from "../core/dir.js";
@@ -18,6 +19,7 @@ function envelope<T>(args: {
   readonly artifactId: string;
   readonly runId: string;
   readonly artifactType: string;
+  readonly schemaVersion: string;
   readonly dependencyArtifactIds: readonly string[];
   readonly createdAt: string;
   readonly payload: T;
@@ -26,7 +28,7 @@ function envelope<T>(args: {
     artifactId: args.artifactId,
     runId: args.runId,
     artifactType: args.artifactType,
-    schemaVersion: "0.1",
+    schemaVersion: args.schemaVersion,
     producer: PRODUCER,
     createdAt: args.createdAt,
     dependencyArtifactIds: args.dependencyArtifactIds,
@@ -83,6 +85,7 @@ async function main(): Promise<void> {
       artifactId: "manifest",
       runId,
       artifactType: "demo-manifest",
+      schemaVersion: manifest.schemaVersion,
       dependencyArtifactIds: [],
       createdAt: now().toISOString(),
       payload: manifest,
@@ -113,10 +116,11 @@ async function main(): Promise<void> {
       throw new Error("Understanding Engine output failed verification.");
     }
 
-    const understandingArtifact = envelope<Understanding>({
+    const understandingArtifact = envelope<ProductUnderstanding>({
       artifactId: "understanding",
       runId,
-      artifactType: "understanding",
+      artifactType: "product-understanding",
+      schemaVersion: understanding.schemaVersion,
       dependencyArtifactIds: [manifestArtifact.artifactId],
       createdAt: now().toISOString(),
       payload: understanding,
@@ -150,6 +154,7 @@ async function main(): Promise<void> {
       artifactId: "plan",
       runId,
       artifactType: "plan",
+      schemaVersion: plan.schemaVersion,
       dependencyArtifactIds: [understandingArtifact.artifactId],
       createdAt: now().toISOString(),
       payload: plan,
@@ -169,6 +174,7 @@ async function main(): Promise<void> {
       artifactId: "dir",
       runId,
       artifactType: "demo-intermediate-representation",
+      schemaVersion: dir.schemaVersion,
       dependencyArtifactIds: [planArtifact.artifactId],
       createdAt: now().toISOString(),
       payload: dir,

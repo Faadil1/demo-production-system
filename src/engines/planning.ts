@@ -2,11 +2,11 @@ import type { Engine, EngineContext } from "../core/engine.js";
 import type { EngineMetrics, ValidationResult, VerificationResult } from "../core/types.js";
 import type { DIRAct, DIRScene } from "../core/dir.js";
 import type { DemoManifest } from "../core/manifest.js";
-import type { Understanding } from "./understanding.js";
+import type { ProductUnderstanding, UnderstandingGateStatus } from "../core/product-understanding.js";
 import type { DecisionRecord } from "../core/decision.js";
 
 export type Plan = {
-  readonly schemaVersion: "0.1";
+  readonly schemaVersion: "0.2";
   readonly title: string;
   readonly goal: "explain" | "convince" | "prove" | "onboard";
   readonly audience: string;
@@ -14,11 +14,16 @@ export type Plan = {
   readonly heroInteractionSceneId: string;
   readonly acts: readonly DIRAct[];
   readonly scenes: readonly DIRScene[];
+  readonly understandingGateStatus: UnderstandingGateStatus;
+  readonly unresolvedRequirements: readonly string[];
+  readonly selectedHeroInteractionId: string;
+  readonly requiredEvidenceIds: readonly string[];
+  readonly humanApprovalRequired: boolean;
 };
 
 export type PlanningInput = {
   readonly manifest: DemoManifest;
-  readonly understanding: Understanding;
+  readonly understanding: ProductUnderstanding;
 };
 
 function splitDuration(total: number): readonly [number, number, number] {
@@ -28,9 +33,25 @@ function splitDuration(total: number): readonly [number, number, number] {
   return [opening, proof, closing];
 }
 
+function collectUnresolvedRequirements(understanding: ProductUnderstanding): readonly string[] {
+  const requirements = new Set<string>();
+  for (const requirement of understanding.gate.requirementsBeforeRender) {
+    requirements.add(requirement);
+  }
+  for (const ambiguity of understanding.ambiguities) {
+    if (ambiguity.resolutionRequired) {
+      requirements.add(`Resolve ambiguity: ${ambiguity.question}`);
+    }
+  }
+  for (const missing of understanding.missingEvidence) {
+    requirements.add(`Acquire evidence for: ${missing.requiredClaim}`);
+  }
+  return Array.from(requirements);
+}
+
 export class PlanningEngine implements Engine<PlanningInput, Plan> {
   readonly name = "reference-planning-engine";
-  readonly version = "0.1.0";
+  readonly version = "0.2.0";
 
   private lastMetrics: EngineMetrics = {
     inputArtifacts: 0,
@@ -52,6 +73,50 @@ export class PlanningEngine implements Engine<PlanningInput, Plan> {
         ],
       };
     }
+
+    if (input.understanding.gate.status === "fail") {
+      return {
+        ok: false,
+        issues: [
+          {
+            path: "understanding.gate",
+            code: "understanding-gate-failed",
+            message: `Cannot plan from a failed Understanding Gate: ${input.understanding.gate.blockingReasons.join(" ")}`,
+          },
+        ],
+      };
+    }
+
+    const selected = input.understanding.selectedHeroInteraction;
+    if (!selected) {
+      return {
+        ok: false,
+        issues: [
+          {
+            path: "understanding.selectedHeroInteraction",
+            code: "missing",
+            message: "No Hero Interaction has been selected by the Understanding Engine.",
+          },
+        ],
+      };
+    }
+
+    const candidate = input.understanding.heroInteractionCandidates.find(
+      (item) => item.id === selected.candidateId,
+    );
+    if (!candidate) {
+      return {
+        ok: false,
+        issues: [
+          {
+            path: "understanding.selectedHeroInteraction.candidateId",
+            code: "unresolved",
+            message: `selectedHeroInteraction.candidateId "${selected.candidateId}" does not match any heroInteractionCandidates entry.`,
+          },
+        ],
+      };
+    }
+
     return { ok: true };
   }
 
@@ -61,6 +126,17 @@ export class PlanningEngine implements Engine<PlanningInput, Plan> {
     const [openingDuration, proofDuration, closingDuration] = splitDuration(
       manifest.demo.durationSeconds,
     );
+
+    const selected = understanding.selectedHeroInteraction;
+    if (!selected) {
+      throw new Error("Planning Engine invariant violated: no Hero Interaction was selected.");
+    }
+    const candidate = understanding.heroInteractionCandidates.find((item) => item.id === selected.candidateId);
+    if (!candidate) {
+      throw new Error(
+        `Planning Engine invariant violated: candidate "${selected.candidateId}" not found among heroInteractionCandidates.`,
+      );
+    }
 
     const acts: DIRAct[] = [
       { id: "opening", purpose: "Establish the problem and audience.", sceneIds: ["context"] },
@@ -72,7 +148,7 @@ export class PlanningEngine implements Engine<PlanningInput, Plan> {
       {
         id: "context",
         actId: "opening",
-        purpose: `Establish the problem: ${understanding.problemStatement}`,
+        purpose: `Establish the problem: ${understanding.product.problem}`,
         intent: "explain",
         durationSeconds: openingDuration,
         evidenceIds: [],
@@ -82,17 +158,17 @@ export class PlanningEngine implements Engine<PlanningInput, Plan> {
       {
         id: "hero",
         actId: "proof",
-        purpose: understanding.heroInteractionCandidate.claim,
+        purpose: candidate.description,
         intent: "prove",
         durationSeconds: proofDuration,
-        evidenceIds: understanding.evidenceCandidates.map((evidence) => evidence.id),
+        evidenceIds: candidate.evidenceIds,
         isHeroInteraction: true,
         transitionRelation: "resolution",
       },
       {
         id: "confirmation",
         actId: "closing",
-        purpose: `Confirm value: ${understanding.valueProposition}`,
+        purpose: `Confirm value: ${understanding.product.valueProposition}`,
         intent: "confirm",
         durationSeconds: closingDuration,
         evidenceIds: [],
@@ -101,6 +177,8 @@ export class PlanningEngine implements Engine<PlanningInput, Plan> {
       },
     ];
 
+    const unresolvedRequirements = collectUnresolvedRequirements(understanding);
+
     const decisions: DecisionRecord[] = [
       {
         decisionId: `decision-${context.runId}-hero-scene`,
@@ -108,18 +186,34 @@ export class PlanningEngine implements Engine<PlanningInput, Plan> {
         createdAt: startedAt.toISOString(),
         engine: this.name,
         question: "Which scene is the addressable Hero Interaction?",
-        options: [{ id: "hero", label: "The proof-act scene compiled from the Hero Interaction candidate." }],
+        options: [{ id: "hero", label: "The proof-act scene compiled from the selected Hero Interaction candidate." }],
         chosenOptionId: "hero",
-        reason:
-          "Exactly one scene must be marked isHeroInteraction per Design Law 1; the proof act carries the candidate.",
-        confidence: understanding.heroInteractionCandidate.confidence,
+        reason: `Consumed understanding.selectedHeroInteraction.candidateId "${selected.candidateId}" per Design Law 1.`,
+        confidence: selected.confidence,
         authority: "engine",
         reversible: true,
+      },
+      {
+        decisionId: `decision-${context.runId}-plan-gate-carryover`,
+        runId: context.runId,
+        createdAt: startedAt.toISOString(),
+        engine: this.name,
+        question: "How should the Understanding Gate status and its unresolved requirements be represented in the Plan?",
+        options: [
+          { id: "carry-over", label: "Record understandingGateStatus and unresolvedRequirements on the Plan." },
+          { id: "drop", label: "Drop gate status and unresolved requirements from the Plan." },
+        ],
+        chosenOptionId: "carry-over",
+        reason:
+          "Ambiguities and missing evidence must never be silently dropped; the Plan preserves them for downstream inspection and rendering gates.",
+        confidence: 1,
+        authority: "policy",
+        reversible: false,
       },
     ];
 
     const plan: Plan = {
-      schemaVersion: "0.1",
+      schemaVersion: "0.2",
       title: manifest.project.name,
       goal: manifest.demo.goal,
       audience: manifest.demo.audience,
@@ -127,6 +221,11 @@ export class PlanningEngine implements Engine<PlanningInput, Plan> {
       heroInteractionSceneId: "hero",
       acts,
       scenes,
+      understandingGateStatus: understanding.gate.status,
+      unresolvedRequirements,
+      selectedHeroInteractionId: candidate.id,
+      requiredEvidenceIds: candidate.evidenceIds,
+      humanApprovalRequired: selected.requiresHumanApproval,
     };
 
     this.lastMetrics = {
@@ -134,7 +233,7 @@ export class PlanningEngine implements Engine<PlanningInput, Plan> {
       completedAt: context.now().toISOString(),
       inputArtifacts: 1,
       outputArtifacts: 1,
-      warnings: 0,
+      warnings: unresolvedRequirements.length,
     };
     this.lastDecisions = decisions;
 

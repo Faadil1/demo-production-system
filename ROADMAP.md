@@ -16,13 +16,13 @@
 
 ## v0.2 — Functional MVP
 
-- Understanding Engine
-- Planning Engine
-- Story Engine
-- Playwright browser adapter
-- Remotion renderer adapter
-- MP4 export
-- One end-to-end example
+- [x] Understanding Engine (RFC-0002 Product Understanding Contract)
+- [x] Planning Engine (consumes Product Understanding Gate + selection)
+- [ ] Story Engine
+- [ ] Playwright browser adapter
+- [ ] Remotion renderer adapter
+- [ ] MP4 export
+- [ ] One end-to-end example
 
 ## v0.5 — Intelligent Demo
 

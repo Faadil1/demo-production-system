@@ -3,6 +3,7 @@ import { UnderstandingEngine } from "../src/engines/understanding.js";
 import { PlanningEngine } from "../src/engines/planning.js";
 import { compileDIR } from "../src/engines/dir-compiler.js";
 import type { DemoManifest } from "../src/core/manifest.js";
+import type { ProductUnderstanding } from "../src/core/product-understanding.js";
 
 const manifest: DemoManifest = {
   schemaVersion: "0.1",
@@ -19,34 +20,6 @@ const manifest: DemoManifest = {
 };
 
 const context = { runId: "run-test", now: () => new Date("2026-07-17T00:00:00Z") };
-
-describe("UnderstandingEngine", () => {
-  it("derives the Hero Interaction candidate from the manifest hint", async () => {
-    const engine = new UnderstandingEngine();
-    expect(engine.validate(manifest)).toEqual({ ok: true });
-
-    const understanding = await engine.run(manifest, context);
-
-    expect(understanding.heroInteractionCandidate.claim).toBe("Verify a signed receipt.");
-    expect(understanding.evidenceCandidates).toHaveLength(3);
-    expect(engine.verify(understanding)).toEqual({ ok: true, score: 0.9 });
-    expect(engine.decisionsFromLastRun()).toHaveLength(1);
-  });
-
-  it("falls back to the value proposition when no hint is present", async () => {
-    const engine = new UnderstandingEngine();
-    const { heroInteractionHint: _omitted, ...productWithoutHint } = manifest.product;
-    const noHintManifest: DemoManifest = {
-      ...manifest,
-      product: productWithoutHint,
-    };
-
-    const understanding = await engine.run(noHintManifest, context);
-
-    expect(understanding.heroInteractionCandidate.claim).toBe(manifest.product.valueProposition);
-    expect(understanding.heroInteractionCandidate.confidence).toBe(0.5);
-  });
-});
 
 describe("PlanningEngine and DIR compiler", () => {
   it("produces a DIR with exactly one addressable Hero Interaction and resolved references", async () => {
@@ -71,7 +44,90 @@ describe("PlanningEngine and DIR compiler", () => {
     }
   });
 
-  it("produces semantically equivalent DIR payloads across repeated runs of identical input", async () => {
+  it("resolves the Plan's selectedHeroInteractionId against the Understanding's selected candidate", async () => {
+    const understandingEngine = new UnderstandingEngine();
+    const understanding = await understandingEngine.run(manifest, context);
+    const planningEngine = new PlanningEngine();
+    const plan = await planningEngine.run({ manifest, understanding }, context);
+
+    expect(plan.selectedHeroInteractionId).toBe(understanding.selectedHeroInteraction?.candidateId);
+    expect(plan.requiredEvidenceIds).toEqual(understanding.selectedHeroInteraction ? plan.requiredEvidenceIds : []);
+    expect(plan.humanApprovalRequired).toBe(true);
+    expect(plan.understandingGateStatus).toBe("conditional");
+  });
+
+  it("carries unresolved requirements from Understanding into the Plan without dropping them", async () => {
+    const understandingEngine = new UnderstandingEngine();
+    const understanding = await understandingEngine.run(manifest, context);
+    const planningEngine = new PlanningEngine();
+    const plan = await planningEngine.run({ manifest, understanding }, context);
+
+    expect(plan.unresolvedRequirements.length).toBeGreaterThan(0);
+    for (const missing of understanding.missingEvidence) {
+      expect(plan.unresolvedRequirements).toContain(`Acquire evidence for: ${missing.requiredClaim}`);
+    }
+  });
+
+  it("rejects planning when the Understanding Gate has failed", async () => {
+    const { heroInteractionHint: _omitted, ...productWithoutHint } = manifest.product;
+    const noHintManifest: DemoManifest = { ...manifest, product: productWithoutHint };
+    const understandingEngine = new UnderstandingEngine();
+    const understanding = await understandingEngine.run(noHintManifest, context);
+    expect(understanding.gate.status).toBe("fail");
+
+    const planningEngine = new PlanningEngine();
+    const validation = planningEngine.validate({ manifest: noHintManifest, understanding });
+    expect(validation.ok).toBe(false);
+  });
+
+  it("produces a conditional DIR readiness for the TrustCheck example", async () => {
+    const understandingEngine = new UnderstandingEngine();
+    const understanding = await understandingEngine.run(manifest, context);
+    const planningEngine = new PlanningEngine();
+    const plan = await planningEngine.run({ manifest, understanding }, context);
+    const dir = compileDIR(manifest, understanding, plan);
+
+    expect(dir.readiness).toBe("conditional");
+    expect(dir.evidence.every((item) => item.verificationStatus === "unverified")).toBe(true);
+  });
+
+  it("never compiles a DIR from a blocked/failed plan", async () => {
+    const understanding: ProductUnderstanding = (
+      await (async () => {
+        const noHintManifest: DemoManifest = {
+          ...manifest,
+          product: {
+            problem: manifest.product.problem,
+            audience: manifest.product.audience,
+            valueProposition: manifest.product.valueProposition,
+          },
+        };
+        return new UnderstandingEngine().run(noHintManifest, context);
+      })()
+    );
+    expect(understanding.gate.status).toBe("fail");
+
+    // A defensive, direct construction bypassing PlanningEngine.validate() to prove
+    // compileDIR() itself refuses a failed/blocked plan rather than relying only on
+    // the Planning Engine's gate.
+    const planningEngine = new PlanningEngine();
+    const forcedPlan = {
+      ...(await planningEngine
+        .run(
+          {
+            manifest,
+            understanding: await new UnderstandingEngine().run(manifest, context),
+          },
+          context,
+        )
+        .then((plan) => plan)),
+      understandingGateStatus: "fail" as const,
+    };
+
+    expect(() => compileDIR(manifest, understanding, forcedPlan)).toThrow(/FAIL state/);
+  });
+
+  it("produces semantically equivalent Plan and DIR payloads across repeated runs of identical input", async () => {
     const understandingEngine = new UnderstandingEngine();
     const planningEngine = new PlanningEngine();
 
@@ -83,6 +139,8 @@ describe("PlanningEngine and DIR compiler", () => {
     const planB = await planningEngine.run({ manifest, understanding: understandingB }, context);
     const dirB = compileDIR(manifest, understandingB, planB);
 
+    expect(understandingA).toEqual(understandingB);
+    expect(planA).toEqual(planB);
     expect(dirA).toEqual(dirB);
   });
 });

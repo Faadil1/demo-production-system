@@ -55,7 +55,7 @@ describe("Engine contract", () => {
 describe("DIR invariants", () => {
   it("contains one addressable Hero Interaction", () => {
     const dir: DemoIntermediateRepresentation = {
-      schemaVersion: "0.1",
+      schemaVersion: "0.2",
       title: "TrustCheck",
       goal: "prove",
       audience: "technical judges",
@@ -78,13 +78,14 @@ describe("DIR invariants", () => {
         claim: "The receipt signature is valid.",
         source: "capture://receipt-verification",
         importance: "critical",
-        verified: true,
+        verificationStatus: "verified",
       }],
       constraints: {
         noGeneratedUI: true,
         minimumEvidenceCount: 1,
         maximumOnScreenWords: 20,
       },
+      readiness: "ready",
     };
 
     expect(dir.scenes.filter((scene) => scene.isHeroInteraction)).toHaveLength(1);

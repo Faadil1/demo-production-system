@@ -1,3 +1,5 @@
+import type { VerificationStatus } from "./provenance.js";
+
 export type SceneIntent =
   | "explain"
   | "reveal"
@@ -22,8 +24,10 @@ export type EvidenceReference = {
   readonly claim: string;
   readonly source: string;
   readonly importance: "supporting" | "important" | "critical";
-  readonly verified: boolean;
+  readonly verificationStatus: VerificationStatus;
 };
+
+export type DIRReadiness = "ready" | "conditional" | "blocked";
 
 export type DIRScene = {
   readonly id: string;
@@ -50,7 +54,7 @@ export type DIRAct = {
 };
 
 export type DemoIntermediateRepresentation = {
-  readonly schemaVersion: "0.1";
+  readonly schemaVersion: "0.2";
   readonly title: string;
   readonly goal: "explain" | "convince" | "prove" | "onboard";
   readonly audience: string;
@@ -64,4 +68,5 @@ export type DemoIntermediateRepresentation = {
     readonly minimumEvidenceCount: number;
     readonly maximumOnScreenWords: number;
   };
+  readonly readiness: DIRReadiness;
 };
