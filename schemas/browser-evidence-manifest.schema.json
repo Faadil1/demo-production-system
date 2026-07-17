@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/dps/browser-evidence-manifest.schema.json",
+  "title": "DPS Browser Evidence Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "capturePlanId", "targetId", "runId", "artifacts", "assertions", "observations", "coverage", "unresolvedRequirements"],
+  "properties": {
+    "schemaVersion": { "const": "0.1" },
+    "capturePlanId": { "type": "string" },
+    "targetId": { "type": "string" },
+    "runId": { "type": "string" },
+    "artifacts": { "type": "array" },
+    "assertions": { "type": "array" },
+    "observations": { "type": "array" },
+    "coverage": {
+      "type": "object",
+      "required": ["requirementCount", "satisfiedCount", "criticalRequirementCount", "satisfiedCriticalCount", "verifiedArtifactCount", "coverageRatio", "sufficient"],
+      "properties": {
+        "coverageRatio": { "type": "number", "minimum": 0, "maximum": 1 },
+        "sufficient": { "type": "boolean" }
+      }
+    },
+    "unresolvedRequirements": { "type": "array" }
+  }
+}

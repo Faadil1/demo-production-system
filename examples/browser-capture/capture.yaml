@@ -1,0 +1,81 @@
+schemaVersion: "0.1"
+id: trustcheck-fixture-capture
+
+target:
+  schemaVersion: "0.1"
+  id: trustcheck-fixture
+  type: local
+  baseUrl: http://127.0.0.1:4173
+  label: TrustCheck local fixture
+
+viewport:
+  width: 1280
+  height: 720
+
+policy:
+  schemaVersion: "0.1"
+  allowedOrigins: []
+  allowExternalNavigation: false
+  allowDownloads: false
+  allowPopups: false
+  allowClipboard: false
+  allowGeolocation: false
+  allowNotifications: false
+  allowCamera: false
+  allowMicrophone: false
+  allowServiceWorkers: false
+  allowFileUploads: false
+  blockThirdPartyRequests: true
+  blockedResourceTypes: []
+  blockedUrlPatterns: []
+  maximumSteps: 100
+  maximumDurationMs: 60000
+  defaultStepTimeoutMs: 10000
+
+steps:
+  - id: navigate-home
+    kind: navigate
+    description: Navigate to the TrustCheck fixture home page.
+    path: /
+    waitUntil: load
+
+  - id: assert-product-visible
+    kind: assert
+    description: Assert the product title is visible.
+    assertionKind: element-visible
+    selector: { strategy: test-id, value: product-title }
+    importance: important
+
+  - id: screenshot-before
+    kind: screenshot
+    description: Capture the initial state before verification.
+    artifactName: before-state
+    fullPage: false
+    animations: disabled
+
+  - id: click-verify
+    kind: click
+    description: Click the Verify Receipt button.
+    selector: { strategy: test-id, value: verify-button }
+
+  - id: assert-result-visible
+    kind: assert
+    description: Assert the result card becomes visible after verification.
+    assertionKind: element-visible
+    selector: { strategy: test-id, value: result-card }
+    importance: critical
+
+  - id: screenshot-after
+    kind: screenshot
+    description: Capture the state after verification completes.
+    artifactName: after-state
+    fullPage: false
+    animations: disabled
+
+evidenceRequirements:
+  - id: evidence-verification-result-visible
+    claim: The verification result becomes visible after clicking Verify Receipt.
+    requiredArtifactKinds: [screenshot, assertion]
+    requiredAssertionIds: [assert-result-visible]
+    minimumVerifiedArtifacts: 1
+    importance: critical

@@ -19,7 +19,7 @@
 - [x] Understanding Engine (RFC-0002 Product Understanding Contract)
 - [x] Planning Engine (consumes Product Understanding Gate + selection)
 - [ ] Story Engine
-- [ ] Playwright browser adapter
+- [x] Playwright browser adapter (RFC-0004 Browser Evidence Capture — reference implementation complete; extension adapters pending)
 - [ ] Remotion renderer adapter
 - [ ] MP4 export
 - [ ] One end-to-end example
@@ -37,6 +37,24 @@
 - [ ] Speech-to-text adapter
 - [ ] Scene/frame extraction + visual observation adapter
 - [ ] OCR adapter
+
+## Browser Evidence Capture (RFC-0004)
+
+Status: Reference implementation complete. Extension adapters pending.
+
+- [x] Browser target and capture-plan contracts, safety policy
+- [x] Replaceable `BrowserAdapter` interface + Playwright Chromium reference implementation
+- [x] Deterministic action execution, assertions, screenshot + sanitized DOM snapshot capture
+- [x] Network interception/recording with sensitive-data redaction
+- [x] Browser-generated `DemoObservationTimeline` (RFC-0003-compatible)
+- [x] Evidence manifest, Capture Gate
+- [x] `BrowserCaptureEngine` (pure domain logic, testable without a real browser)
+- [x] `capture-browser` CLI command
+- [x] One-way bridge from verified capture evidence into RFC-0002 `EvidenceItem`s
+- [ ] Browser exploration agent
+- [ ] Authenticated session adapter
+- [ ] Visual comparison / OCR / accessibility-tree analysis adapters
+- [ ] Video/trace recording, remote browser adapter
 
 ## v0.5 — Intelligent Demo
 

@@ -1,0 +1,249 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/dps/browser-capture-plan.schema.json",
+  "title": "DPS Browser Capture Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "target", "viewport", "policy", "steps", "evidenceRequirements"],
+  "$defs": {
+    "selector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy"],
+      "properties": {
+        "strategy": { "enum": ["test-id", "role", "label", "text", "css"] },
+        "value": { "type": "string" },
+        "role": { "type": "string" },
+        "name": { "type": "string" },
+        "exact": { "type": "boolean" }
+      }
+    },
+    "stepBase": {
+      "type": "object",
+      "required": ["id", "kind", "description"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string" },
+        "description": { "type": "string", "minLength": 1 },
+        "timeoutMs": { "type": "number", "minimum": 1 },
+        "continueOnFailure": { "type": "boolean" },
+        "sensitive": { "type": "boolean" }
+      }
+    }
+  },
+  "properties": {
+    "schemaVersion": { "const": "0.1" },
+    "id": { "type": "string", "minLength": 1 },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "id", "type", "baseUrl"],
+      "properties": {
+        "schemaVersion": { "const": "0.1" },
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "enum": ["local", "explicit-remote"] },
+        "baseUrl": { "type": "string", "minLength": 1 },
+        "label": { "type": "string" }
+      }
+    },
+    "viewport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height"],
+      "properties": {
+        "width": { "type": "number", "minimum": 320, "maximum": 3840 },
+        "height": { "type": "number", "minimum": 480, "maximum": 2160 },
+        "deviceScaleFactor": { "type": "number", "minimum": 1, "maximum": 3 },
+        "isMobile": { "type": "boolean" }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "allowedOrigins",
+        "allowExternalNavigation",
+        "allowDownloads",
+        "allowPopups",
+        "allowClipboard",
+        "allowGeolocation",
+        "allowNotifications",
+        "allowCamera",
+        "allowMicrophone",
+        "allowServiceWorkers",
+        "allowFileUploads",
+        "blockThirdPartyRequests",
+        "blockedResourceTypes",
+        "blockedUrlPatterns",
+        "maximumSteps",
+        "maximumDurationMs",
+        "defaultStepTimeoutMs"
+      ],
+      "properties": {
+        "schemaVersion": { "const": "0.1" },
+        "allowedOrigins": { "type": "array", "items": { "type": "string" } },
+        "allowExternalNavigation": { "type": "boolean" },
+        "allowDownloads": { "type": "boolean" },
+        "allowPopups": { "type": "boolean" },
+        "allowClipboard": { "type": "boolean" },
+        "allowGeolocation": { "type": "boolean" },
+        "allowNotifications": { "type": "boolean" },
+        "allowCamera": { "type": "boolean" },
+        "allowMicrophone": { "type": "boolean" },
+        "allowServiceWorkers": { "type": "boolean" },
+        "allowFileUploads": { "type": "boolean" },
+        "blockThirdPartyRequests": { "type": "boolean" },
+        "blockedResourceTypes": {
+          "type": "array",
+          "items": { "enum": ["document", "stylesheet", "image", "media", "font", "script", "xhr", "fetch", "websocket", "eventsource", "manifest", "other"] }
+        },
+        "blockedUrlPatterns": { "type": "array", "items": { "type": "string" } },
+        "maximumSteps": { "type": "number", "minimum": 1, "maximum": 500 },
+        "maximumDurationMs": { "type": "number", "minimum": 1000 },
+        "defaultStepTimeoutMs": { "type": "number", "minimum": 100 }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "allOf": [{ "$ref": "#/$defs/stepBase" }],
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["kind", "waitUntil"],
+            "properties": {
+              "kind": { "const": "navigate" },
+              "path": { "type": "string" },
+              "url": { "type": "string" },
+              "waitUntil": { "enum": ["domcontentloaded", "load", "networkidle"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["kind", "selector"],
+            "properties": {
+              "kind": { "const": "click" },
+              "selector": { "$ref": "#/$defs/selector" },
+              "expectedNavigation": { "type": "boolean" },
+              "button": { "enum": ["left", "right"] },
+              "clickCount": { "type": "number" }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["kind", "selector", "value", "valueSource"],
+            "properties": {
+              "kind": { "const": "fill" },
+              "selector": { "$ref": "#/$defs/selector" },
+              "value": { "type": "string" },
+              "valueSource": { "enum": ["literal", "fixture"] },
+              "redactionPolicy": { "enum": ["mask", "omit"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["kind", "selector", "value"],
+            "properties": {
+              "kind": { "const": "select" },
+              "selector": { "$ref": "#/$defs/selector" },
+              "value": { "type": "string" }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["kind", "key"],
+            "properties": {
+              "kind": { "const": "press" },
+              "selector": { "$ref": "#/$defs/selector" },
+              "key": { "enum": ["Enter", "Tab", "Escape", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Backspace", "Delete", "Space"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["kind", "condition"],
+            "properties": {
+              "kind": { "const": "wait-for" },
+              "condition": {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": { "enum": ["selector-visible", "selector-hidden", "url", "load-state", "timeout"] },
+                  "selector": { "$ref": "#/$defs/selector" },
+                  "value": { "type": "string" },
+                  "durationMs": { "type": "number" }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["kind", "assertionKind", "importance"],
+            "properties": {
+              "kind": { "const": "assert" },
+              "assertionKind": {
+                "enum": [
+                  "url-equals",
+                  "url-matches",
+                  "title-equals",
+                  "element-visible",
+                  "element-hidden",
+                  "text-equals",
+                  "text-contains",
+                  "attribute-equals",
+                  "count-equals",
+                  "value-equals",
+                  "screenshot-created"
+                ]
+              },
+              "selector": { "$ref": "#/$defs/selector" },
+              "attribute": { "type": "string" },
+              "expected": { "type": ["string", "number", "boolean"] },
+              "importance": { "enum": ["supporting", "important", "critical"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["kind", "artifactName", "fullPage", "animations"],
+            "properties": {
+              "kind": { "const": "screenshot" },
+              "artifactName": { "type": "string" },
+              "fullPage": { "type": "boolean" },
+              "selector": { "$ref": "#/$defs/selector" },
+              "maskSelectors": { "type": "array", "items": { "$ref": "#/$defs/selector" } },
+              "omitBackground": { "type": "boolean" },
+              "animations": { "enum": ["disabled", "allow"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["kind", "artifactName", "sanitize"],
+            "properties": {
+              "kind": { "const": "dom-snapshot" },
+              "artifactName": { "type": "string" },
+              "selector": { "$ref": "#/$defs/selector" },
+              "sanitize": { "const": true }
+            }
+          }
+        ]
+      }
+    },
+    "evidenceRequirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "claim", "requiredArtifactKinds", "requiredAssertionIds", "minimumVerifiedArtifacts", "importance"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "claim": { "type": "string", "minLength": 1 },
+          "requiredArtifactKinds": { "type": "array", "items": { "enum": ["screenshot", "dom-snapshot", "assertion", "url"] } },
+          "requiredAssertionIds": { "type": "array", "items": { "type": "string" } },
+          "minimumVerifiedArtifacts": { "type": "number", "minimum": 0 },
+          "importance": { "enum": ["supporting", "important", "critical"] }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/dps/browser-capture-result.schema.json",
+  "title": "DPS Browser Capture Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "capturePlanId",
+    "targetId",
+    "launch",
+    "finalUrl",
+    "durationMs",
+    "stepResults",
+    "assertions",
+    "screenshots",
+    "domSnapshots",
+    "consoleRecords",
+    "networkRecords",
+    "safetyViolations",
+    "evidenceManifest",
+    "observationTimeline",
+    "gate"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "0.1" },
+    "capturePlanId": { "type": "string" },
+    "targetId": { "type": "string" },
+    "launch": {
+      "type": "object",
+      "required": ["launched", "browserName", "browserVersion", "failureReason"],
+      "properties": { "launched": { "type": "boolean" } }
+    },
+    "finalUrl": { "type": ["string", "null"] },
+    "durationMs": { "type": "number", "minimum": 0 },
+    "stepResults": { "type": "array" },
+    "assertions": { "type": "array" },
+    "screenshots": { "type": "array" },
+    "domSnapshots": { "type": "array" },
+    "consoleRecords": { "type": "array" },
+    "networkRecords": { "type": "array" },
+    "safetyViolations": { "type": "array" },
+    "evidenceManifest": { "type": "object" },
+    "observationTimeline": { "type": "object" },
+    "gate": {
+      "type": "object",
+      "required": ["name", "status", "blockingReasons", "warnings", "requirementsBeforeUse"],
+      "properties": {
+        "name": { "const": "browser-capture" },
+        "status": { "enum": ["pass", "conditional", "fail"] }
+      }
+    }
+  }
+}

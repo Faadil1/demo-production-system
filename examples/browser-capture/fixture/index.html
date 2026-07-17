@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TrustCheck Demo Fixture</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <h1 data-testid="product-title">TrustCheck</h1>
+    <p data-testid="problem-statement">Agents cannot independently verify whether a claimed action occurred.</p>
+
+    <section data-testid="state-card" class="card">
+      <p data-testid="state-text">Awaiting verification.</p>
+    </section>
+
+    <button data-testid="verify-button" type="button">Verify Receipt</button>
+
+    <section data-testid="result-card" class="card result hidden">
+      <p data-testid="result-text">Verification result: signature valid.</p>
+    </section>
+  </main>
+  <script src="script.js"></script>
+</body>
+</html>
