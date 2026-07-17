@@ -24,14 +24,28 @@
 - [ ] MP4 export
 - [ ] One end-to-end example
 
+## Existing Demo Analysis (RFC-0003)
+
+- [x] Media source contracts (local-video / youtube-url / remote-url)
+- [x] Deterministic local ffprobe-based media inspection
+- [x] Transcript and observation-timeline contracts
+- [x] Existing Demo Analysis domain model + deterministic reference engine
+- [x] Hero Interaction detection over supplied observations
+- [x] Demo Score (100-point, explainable) and Analysis Gate
+- [x] `analyze-demo` CLI command
+- [ ] YouTube ingestion adapter
+- [ ] Speech-to-text adapter
+- [ ] Scene/frame extraction + visual observation adapter
+- [ ] OCR adapter
+
 ## v0.5 — Intelligent Demo
 
-- Hero Interaction Detector
-- Evidence coverage analysis
-- Demo Score
-- Critic Engine
-- Decision Replay
-- Motion Authenticity Gate
+- [x] Hero Interaction Detector (existing-demo analysis; forward-planning detector remains RFC-0002's manifest-hint policy)
+- [x] Evidence coverage analysis (existing-demo analysis; forward-planning coverage remains RFC-0002)
+- [x] Demo Score (existing-demo analysis)
+- [ ] Critic Engine
+- [ ] Decision Replay
+- [ ] Motion Authenticity Gate
 
 ## v1.0 — Platform
 

@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/dps/existing-demo-analysis-input.schema.json",
+  "title": "DPS Existing Demo Analysis Input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "source"],
+  "properties": {
+    "schemaVersion": { "const": "0.1" },
+    "goal": { "enum": ["explain", "convince", "prove", "onboard"] },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "id", "type", "uri"],
+      "properties": {
+        "schemaVersion": { "const": "0.1" },
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "enum": ["local-video", "youtube-url", "remote-url"] },
+        "uri": { "type": "string", "minLength": 1 },
+        "label": { "type": "string" }
+      }
+    },
+    "transcript": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "language", "sourceType", "segments"],
+      "properties": {
+        "schemaVersion": { "const": "0.1" },
+        "language": { "type": ["string", "null"] },
+        "sourceType": { "enum": ["human", "caption-file", "speech-to-text", "unknown"] },
+        "segments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "startSeconds", "endSeconds", "text"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "startSeconds": { "type": "number", "minimum": 0 },
+              "endSeconds": { "type": "number", "minimum": 0 },
+              "text": { "type": "string" },
+              "speaker": { "type": "string" },
+              "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+            }
+          }
+        }
+      }
+    },
+    "observationTimeline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "sourceId", "observations"],
+      "properties": {
+        "schemaVersion": { "const": "0.1" },
+        "sourceId": { "type": "string", "minLength": 1 },
+        "observations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "kind",
+              "startSeconds",
+              "endSeconds",
+              "statement",
+              "sourceType",
+              "verificationStatus",
+              "confidence",
+              "relatedEvidenceIds"
+            ],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "kind": {
+                "enum": [
+                  "product-ui-visible",
+                  "interaction-start",
+                  "interaction-complete",
+                  "state-change",
+                  "before-state",
+                  "after-state",
+                  "proof-visible",
+                  "claim-spoken",
+                  "claim-on-screen",
+                  "problem-context",
+                  "result-visible",
+                  "call-to-action",
+                  "title-card",
+                  "transition",
+                  "silence",
+                  "unknown"
+                ]
+              },
+              "startSeconds": { "type": "number", "minimum": 0 },
+              "endSeconds": { "type": "number", "minimum": 0 },
+              "statement": { "type": "string" },
+              "sourceType": {
+                "enum": ["manifest", "repository", "documentation", "capture", "runtime", "human", "inference"]
+              },
+              "verificationStatus": {
+                "enum": ["unverified", "partially-verified", "verified", "contradicted"]
+              },
+              "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+              "relatedEvidenceIds": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

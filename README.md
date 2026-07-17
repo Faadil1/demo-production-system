@@ -8,6 +8,7 @@ Demo Production System (working name: **DPS**) is an evidence-first, configurati
 
 **RFC-0001 — Foundation Vertical Slice: implemented**
 **RFC-0002 — Product Understanding Contract: implemented**
+**RFC-0003 — Existing Demo Analysis: implemented**
 
 The repository now runs an end-to-end, deterministic, provider-independent pipeline:
 
@@ -40,6 +41,20 @@ npm run demo -- examples/minimal/demo.yaml
 Artifacts are written to `.dps/runs/<run-id>/`: `manifest.json`, `understanding.json`,
 `plan.json`, `dir.json`, `decisions.json`, `events.json`, `run-summary.json`.
 
+A second, independent pipeline analyzes an *existing* demo video deterministically and
+locally — no computer vision, speech recognition, or LLM involved:
+
+```bash
+npm run analyze-demo -- examples/existing-demo/analysis.yaml
+```
+
+It inspects local media with `ffprobe`, consumes an optional transcript and/or
+human-supplied observation timeline, and produces an `existing-demo-analysis.json`
+artifact with a Hero Interaction detection, a 100-point explainable Demo Score, and a
+`pass`/`conditional`/`fail` Analysis Gate. See
+[`docs/005-existing-demo-analysis.md`](docs/005-existing-demo-analysis.md) for the full
+contract.
+
 No browser automation, AI provider, renderer, or generated media is part of the core.
 
 ## Principles
@@ -57,10 +72,13 @@ No browser automation, AI provider, renderer, or generated media is part of the 
 
 ```text
 src/
-  core/       # domain types, engine contract, artifact/decision/event contracts, DIR type
-  engines/    # deterministic reference Understanding + Planning engines, DIR compiler
+  core/       # domain types, engine contract, artifact/decision/event contracts, DIR type,
+              # media/transcript/observation/existing-demo-analysis contracts
+  engines/    # deterministic reference Understanding + Planning engines, DIR compiler,
+              # ExistingDemoAnalysisEngine
+  adapters/   # replaceable MediaInspector interface + ffprobe reference implementation
   registry/   # filesystem ArtifactRegistry implementation
-  cli/        # demo pipeline entrypoint (npm run demo)
+  cli/        # demo and analyze-demo pipeline entrypoints
 schemas/
 docs/
 tests/
@@ -77,11 +95,12 @@ npm test
 
 ## Next milestone
 
-With RFC-0001 and RFC-0002 complete, the next milestone (v0.2) introduces the Story
-Engine, browser capture adapter, and renderer adapter behind the same core contracts.
-A capture adapter is also the prerequisite for the Understanding Gate ever reaching
-`pass` (see docs/004's Current limitations). Rendering and browser capture remain
-deliberately excluded from the core itself.
+With RFC-0001, RFC-0002, and RFC-0003 complete, the next milestone (v0.2) introduces the
+Story Engine, browser capture adapter, and renderer adapter behind the same core
+contracts. A capture adapter is also the prerequisite for the Understanding Gate (RFC-0002)
+ever reaching `pass`, and for the Existing Demo Analysis Hero Interaction/evidence
+detection (RFC-0003) to run on more than externally-supplied observations. Rendering and
+browser capture remain deliberately excluded from the core itself.
 
 ## Naming
 

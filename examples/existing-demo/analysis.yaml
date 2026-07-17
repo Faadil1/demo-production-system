@@ -1,0 +1,121 @@
+schemaVersion: "0.1"
+
+# This example intentionally references a local video file ("./demo.mp4") that is NOT
+# committed to the repository (RFC-0003 explicitly forbids committing binary video).
+# Running `npm run analyze-demo -- examples/existing-demo/analysis.yaml` as-is will
+# therefore produce an honest, deterministic FAIL-gate analysis (media-inspection
+# status "invalid", issue "file-missing") — this is the correct, non-fake behavior.
+#
+# To see a real ffprobe-based inspection and a conditional/pass-eligible analysis,
+# place your own local video at examples/existing-demo/demo.mp4 (or edit `source.uri`
+# below to point at any local video file you have), then re-run the command. See
+# README.md in this directory for details.
+
+source:
+  schemaVersion: "0.1"
+  id: trustcheck-existing-demo
+  type: local-video
+  uri: ./demo.mp4
+  label: TrustCheck existing demo recording
+
+goal: prove
+
+transcript:
+  schemaVersion: "0.1"
+  language: en
+  sourceType: human
+  segments:
+    - id: transcript-001
+      startSeconds: 0
+      endSeconds: 4
+      text: TrustCheck helps agent developers independently verify claimed actions.
+    - id: transcript-002
+      startSeconds: 4
+      endSeconds: 10
+      text: Here's the TrustCheck dashboard where you submit a signed receipt.
+    - id: transcript-003
+      startSeconds: 10
+      endSeconds: 18
+      text: We click verify, and TrustCheck checks the signature against the public key.
+    - id: transcript-004
+      startSeconds: 18
+      endSeconds: 24
+      text: The verification result is now visible right here, independently confirmed.
+
+observationTimeline:
+  schemaVersion: "0.1"
+  sourceId: trustcheck-existing-demo
+  observations:
+    - id: observation-title-card
+      kind: title-card
+      startSeconds: 0
+      endSeconds: 2
+      statement: Title card reads "TrustCheck".
+      sourceType: human
+      verificationStatus: verified
+      confidence: 1
+      relatedEvidenceIds: []
+    - id: observation-problem
+      kind: problem-context
+      startSeconds: 2
+      endSeconds: 4
+      statement: Narration establishes that agent claims cannot be independently verified today.
+      sourceType: human
+      verificationStatus: verified
+      confidence: 0.9
+      relatedEvidenceIds: []
+    - id: observation-product-ui
+      kind: product-ui-visible
+      startSeconds: 4
+      endSeconds: 10
+      statement: The TrustCheck dashboard is visible on screen.
+      sourceType: human
+      verificationStatus: verified
+      confidence: 1
+      relatedEvidenceIds: []
+    - id: observation-interaction-start
+      kind: interaction-start
+      startSeconds: 10
+      endSeconds: 12
+      statement: User clicks "Verify" on a submitted receipt.
+      sourceType: human
+      verificationStatus: verified
+      confidence: 0.9
+      relatedEvidenceIds: []
+    - id: observation-interaction-complete
+      kind: interaction-complete
+      startSeconds: 12
+      endSeconds: 16
+      statement: Signature verification against the public key completes.
+      sourceType: human
+      verificationStatus: unverified
+      confidence: 0.8
+      relatedEvidenceIds: []
+    - id: observation-result-visible
+      kind: result-visible
+      startSeconds: 16
+      endSeconds: 20
+      statement: The verification result banner is shown on screen.
+      sourceType: human
+      verificationStatus: unverified
+      confidence: 0.85
+      relatedEvidenceIds:
+        - evidence-hint-verification-result
+    - id: observation-claim-spoken
+      kind: claim-spoken
+      startSeconds: 18
+      endSeconds: 24
+      statement: Narrator states the result is "independently confirmed".
+      sourceType: human
+      verificationStatus: verified
+      confidence: 0.9
+      relatedEvidenceIds: []
+    - id: observation-cta
+      kind: call-to-action
+      startSeconds: 24
+      endSeconds: 27
+      statement: Closing screen invites viewers to try TrustCheck.
+      sourceType: human
+      verificationStatus: verified
+      confidence: 1
+      relatedEvidenceIds: []

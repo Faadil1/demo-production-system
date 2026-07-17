@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/dps/existing-demo-analysis.schema.json",
+  "title": "DPS Existing Demo Analysis Artifact",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "source",
+    "mediaInspection",
+    "transcriptSummary",
+    "structure",
+    "heroInteraction",
+    "evidenceAnalysis",
+    "rhythmAnalysis",
+    "clarityAnalysis",
+    "risks",
+    "unknowns",
+    "score",
+    "gate"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "0.1" },
+    "source": { "type": "object" },
+    "mediaInspection": {
+      "type": "object",
+      "required": ["schemaVersion", "sourceId", "status"],
+      "properties": {
+        "status": { "enum": ["inspected", "unsupported", "unavailable", "invalid"] }
+      }
+    },
+    "transcriptSummary": { "type": "object" },
+    "structure": { "type": "object" },
+    "heroInteraction": {
+      "type": "object",
+      "required": ["status", "confidence"],
+      "properties": {
+        "status": { "enum": ["identified", "candidate-only", "not-found", "ambiguous"] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "evidenceAnalysis": { "type": "object" },
+    "rhythmAnalysis": { "type": "object" },
+    "clarityAnalysis": { "type": "object" },
+    "risks": { "type": "array" },
+    "unknowns": { "type": "array" },
+    "score": {
+      "type": "object",
+      "required": ["total", "maximum", "grade", "categories"],
+      "properties": {
+        "total": { "type": "number", "minimum": 0, "maximum": 100 },
+        "maximum": { "const": 100 },
+        "grade": { "enum": ["excellent", "strong", "adequate", "weak", "insufficient"] },
+        "categories": { "type": "array" }
+      }
+    },
+    "gate": {
+      "type": "object",
+      "required": ["name", "status", "blockingReasons", "warnings", "requirementsBeforeUse"],
+      "properties": {
+        "name": { "const": "existing-demo-analysis" },
+        "status": { "enum": ["pass", "conditional", "fail"] }
+      }
+    }
+  }
+}
