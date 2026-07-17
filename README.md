@@ -6,18 +6,30 @@ Demo Production System (working name: **DPS**) is an evidence-first, configurati
 
 ## Current status
 
-**Sprint 1 — Foundation**
+**RFC-0001 — Foundation Vertical Slice: implemented**
 
-This repository currently defines the smallest executable core:
+The repository now runs an end-to-end, deterministic, provider-independent pipeline:
 
-- canonical domain types;
-- engine contracts;
-- artifact envelope and registry;
-- decision log;
-- event bus;
-- Demo Intermediate Representation (DIR);
-- initial `demo.yaml` schema;
-- contract tests.
+```text
+demo.yaml
+  -> manifest loading + JSON Schema validation
+  -> reference Understanding Engine
+  -> reference Planning Engine
+  -> DIR compilation
+  -> filesystem Artifact Registry
+  -> Decision Log
+  -> lifecycle Event Log
+  -> run-summary.json
+```
+
+Run it with:
+
+```bash
+npm run demo -- examples/minimal/demo.yaml
+```
+
+Artifacts are written to `.dps/runs/<run-id>/`: `manifest.json`, `understanding.json`,
+`plan.json`, `dir.json`, `decisions.json`, `events.json`, `run-summary.json`.
 
 No browser automation, AI provider, renderer, or generated media is part of the core.
 
@@ -36,12 +48,10 @@ No browser automation, AI provider, renderer, or generated media is part of the 
 
 ```text
 src/
-  core/
-    artifacts/
-    decisions/
-    engines/
-    events/
-    dir/
+  core/       # domain types, engine contract, artifact/decision/event contracts, DIR type
+  engines/    # deterministic reference Understanding + Planning engines, DIR compiler
+  registry/   # filesystem ArtifactRegistry implementation
+  cli/        # demo pipeline entrypoint (npm run demo)
 schemas/
 docs/
 tests/
@@ -56,19 +66,11 @@ npm run typecheck
 npm test
 ```
 
-## First implementation milestone
+## Next milestone
 
-The first vertical slice will accept a validated project manifest and produce:
-
-```text
-demo.yaml
-  -> understanding artifact
-  -> plan artifact
-  -> DIR
-  -> deterministic JSON output
-```
-
-Rendering and browser capture are deliberately deferred until this foundation passes its contract tests.
+With RFC-0001 complete, the next milestone (v0.2) introduces the Story Engine, browser
+capture adapter, and renderer adapter behind the same core contracts. Rendering and
+browser capture remain deliberately excluded from the core itself.
 
 ## Naming
 

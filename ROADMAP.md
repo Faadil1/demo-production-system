@@ -10,9 +10,9 @@
 - [x] Initial DIR
 - [x] `demo.yaml` JSON Schema
 - [x] Contract-test skeleton
-- [ ] First reference engine
-- [ ] Filesystem artifact registry
-- [ ] CLI validation command
+- [x] First reference engine
+- [x] Filesystem artifact registry
+- [x] CLI validation command
 
 ## v0.2 — Functional MVP
 
