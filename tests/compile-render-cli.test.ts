@@ -108,7 +108,30 @@ describe("npm run compile-render (CLI)", () => {
     expect(assets.payload.length).toBe(1);
   });
 
-  it("Case C: exits 0 and emits resolved-assets + plan + a pass gate", async () => {
+    it("supports YAML inputs with identical Case A/B/C exit and plan-ID behavior", async () => {
+    const passing = buildBundle({ storyboard: twoSceneStoryboard() });
+    const rejectedStoryboard = { ...twoSceneStoryboard(), gate: { status: "fail" as const, blockingReasons: ["narrative gap"], warnings: [], requirementsBeforeRender: [] } };
+    const rejected = buildBundle({ storyboard: rejectedStoryboard });
+    const failingGate = buildBundle({
+      storyboard: twoSceneStoryboard(),
+      adapterCapabilities: defaultAdapterCapabilities({ supportedFrameRates: [] }),
+    });
+
+    for (const [name, bundle, expectedExit, expectsPlan] of [
+      ["case-a", rejected, 1, false],
+      ["case-b", failingGate, 1, true],
+      ["case-c", passing, 0, true],
+    ] as const) {
+      const inputPath = path.join(cwd, name + ".yaml");
+      // JSON is a strict subset of YAML; this exercises the YAML parser path without
+      // introducing a serializer dependency into the test.
+      await writeFile(inputPath, JSON.stringify(bundle), "utf8");
+      const result = await runCli(inputPath);
+      expect(result.exitCode).toBe(expectedExit);
+      expect(result.stdout.includes("Render Plan artifact: render-plan-")).toBe(expectsPlan);
+    }
+  });
+it("Case C: exits 0 and emits resolved-assets + plan + a pass gate", async () => {
     const storyboard = twoSceneStoryboard();
     const bundle = buildBundle({ storyboard });
     const inputPath = path.join(cwd, "input.json");
