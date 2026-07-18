@@ -11,7 +11,8 @@
     "demo": "tsx src/cli/demo.ts",
     "analyze-demo": "tsx src/cli/analyze-demo.ts",
     "capture-browser": "tsx src/cli/capture-browser.ts",
-    "compile-story": "tsx src/cli/compile-story.ts"
+    "compile-story": "tsx src/cli/compile-story.ts",
+    "compile-render": "tsx src/cli/compile-render.ts"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
