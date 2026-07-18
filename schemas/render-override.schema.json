@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/dps/render-override.schema.json",
+  "title": "RFC-0006 RenderOverrideRecord",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "findingId", "reasonCode", "authority", "rationale", "policy", "createdAt", "reversible"],
+  "properties": {
+    "schemaVersion": { "const": "0.1" },
+    "id": { "type": "string", "minLength": 1 },
+    "findingId": { "type": "string", "minLength": 1 },
+    "reasonCode": {
+      "enum": ["OPTIONAL_ASSET_UNAVAILABLE", "OPTIONAL_ASSET_RECAPTURE_RECOMMENDED", "NON_CRITICAL_LAYOUT_DEGRADATION"]
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "authorityId"],
+      "properties": { "kind": { "const": "human" }, "authorityId": { "type": "string", "minLength": 1 } }
+    },
+    "rationale": { "type": "string", "minLength": 1 },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version"],
+      "properties": { "id": { "type": "string", "minLength": 1 }, "version": { "type": "string", "minLength": 1 } }
+    },
+    "createdAt": { "type": "string", "minLength": 1 },
+    "reversible": { "const": true }
+  }
+}

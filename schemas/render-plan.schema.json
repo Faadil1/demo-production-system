@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/dps/render-plan.schema.json",
+  "title": "RFC-0006 RenderPlan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "storyboardArtifactId",
+    "storyboardContentHash",
+    "outputProfileSource",
+    "resolvedOutputProfile",
+    "timing",
+    "scenes",
+    "assetBindings",
+    "resolvedAssets",
+    "preparationRequirements",
+    "constraints",
+    "requiredCapabilityIds",
+    "provenance"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "0.1" },
+    "id": { "type": "string", "minLength": 1 },
+    "storyboardArtifactId": { "type": "string", "minLength": 1 },
+    "storyboardContentHash": { "type": "string", "minLength": 1 },
+    "outputProfileSource": { "type": "object" },
+    "resolvedOutputProfile": { "$ref": "render-output-profile.schema.json" },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "frameRate", "quantizationPolicy", "totalNarrativeDurationMs", "totalFrames", "boundaries"],
+      "properties": {
+        "schemaVersion": { "const": "0.1" },
+        "frameRate": { "type": "object" },
+        "quantizationPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "version"],
+          "properties": { "id": { "const": "cumulative-half-even" }, "version": { "const": "0.1" } }
+        },
+        "totalNarrativeDurationMs": { "type": "number", "minimum": 0 },
+        "totalFrames": { "type": "integer", "minimum": 0 },
+        "boundaries": { "type": "array" }
+      }
+    },
+    "scenes": { "type": "array" },
+    "assetBindings": { "type": "array" },
+    "resolvedAssets": { "type": "array" },
+    "preparationRequirements": { "type": "array" },
+    "constraints": { "type": "array" },
+    "requiredCapabilityIds": { "type": "array", "items": { "type": "string" } },
+    "provenance": { "type": "object" }
+  }
+}
