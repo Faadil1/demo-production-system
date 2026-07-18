@@ -1,4 +1,4 @@
-﻿# Demo Production System
+# Demo Production System
 
 > A demo is not a recording of a product. It is the construction of understanding.
 
