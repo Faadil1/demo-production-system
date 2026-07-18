@@ -2,6 +2,7 @@ node_modules/
 dist/
 coverage/
 .dps/
+.claude/
 .env
 .env.*
 !.env.example
