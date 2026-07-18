@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import type { Engine, EngineContext } from "../core/engine.js";
 import type { EngineMetrics, ValidationResult, VerificationResult } from "../core/types.js";
-import { canonicalHash, codePointCompare, deterministicId, layerSortKey, sortedByCodePoint } from "../core/render-canonical.js";
+import { canonicalHash, codePointCompare, deterministicId, layerSortKey, normalizeAdapterCapabilities, sortedByCodePoint } from "../core/render-canonical.js";
 import { resolveOutputProfile } from "../core/render-profile.js";
-import { detectMediaType } from "../core/render-media.js";
+import { detectMediaType, inspectMediaStructure } from "../core/render-media.js";
 import { quantizeScenes } from "../core/frame-quantization.js";
 import { frameRateToExact, compare as compareRational } from "../core/rational.js";
 import type { RenderAssetCandidateRecord, RenderBindingRequest, RenderCompilerBundle, RenderTextLayerRequest } from "../core/render-input.js";
@@ -111,30 +111,53 @@ const LAYOUT_POLICY_ID = { id: "minimal-layout-policy", version: "0.1" } as cons
 // Deterministic text measurement reference model (§26-27)
 // ---------------------------------------------------------------------------
 
-const DEFAULT_CHAR_WIDTH_FACTOR = 0.58;
-const LINE_HEIGHT_FACTOR = 1.2;
+const TEXT_MEASUREMENT_ENGINE = { id: "dps-conservative-text", version: "1" } as const;
+type FontToken = "dps-sans-regular-v1" | "dps-sans-semibold-v1" | "dps-mono-regular-v1";
+const FONT_WIDTH_UNITS: Readonly<Record<FontToken, number>> = {
+  "dps-sans-regular-v1": 0.64,
+  "dps-sans-semibold-v1": 0.68,
+  "dps-mono-regular-v1": 0.62,
+};
+const LINE_HEIGHT_FACTOR = 1.3;
 
-function measure(text: string, fontSizePx: number, charWidthFactor: number): { readonly widthPx: number; readonly heightPx: number } {
-  return { widthPx: text.length * fontSizePx * charWidthFactor, heightPx: fontSizePx * LINE_HEIGHT_FACTOR };
-}
-
-function fits(text: string, fontSizePx: number, charWidthFactor: number, boxWidthPx: number, boxHeightPx: number): boolean {
-  const m = measure(text, fontSizePx, charWidthFactor);
-  return m.widthPx <= boxWidthPx && m.heightPx <= boxHeightPx;
+function measuredLines(text: string, fontSizePx: number, fontToken: FontToken, boxWidthPx: number): readonly string[] {
+  const maxUnits = Math.floor(boxWidthPx / (fontSizePx * FONT_WIDTH_UNITS[fontToken]));
+  if (maxUnits < 1) return [];
+  const result: string[] = [];
+  for (const paragraph of text.split("\n")) {
+    const words = paragraph.split(/\s+/u);
+    let line = "";
+    for (const word of words) {
+      if (word.length > maxUnits) return [];
+      const next = line.length === 0 ? word : line + " " + word;
+      if (next.length <= maxUnits) line = next;
+      else { result.push(line); line = word; }
+    }
+    result.push(line);
+  }
+  return result;
 }
 
 function greatestFittingFontSize(
   text: string,
   minSizePx: number,
   maxSizePx: number,
-  charWidthFactor: number,
+  fontToken: FontToken,
   boxWidthPx: number,
   boxHeightPx: number,
 ): number | null {
-  for (let size = Math.floor(maxSizePx); size >= Math.ceil(minSizePx); size--) {
-    if (fits(text, size, charWidthFactor, boxWidthPx, boxHeightPx)) return size;
+  if (!Number.isInteger(minSizePx) || !Number.isInteger(maxSizePx) || minSizePx <= 0 || maxSizePx < minSizePx) return null;
+  for (let size = maxSizePx; size >= minSizePx; size--) {
+    const lines = measuredLines(text, size, fontToken, boxWidthPx);
+    if (lines.length > 0 && lines.length * size * LINE_HEIGHT_FACTOR <= boxHeightPx) return size;
   }
   return null;
+}
+
+function strictBase64(value: string | undefined): Buffer | null {
+  if (!value || value.length === 0 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) return null;
+  const bytes = Buffer.from(value, "base64");
+  return bytes.toString("base64") === value ? bytes : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -265,6 +288,17 @@ export class RenderEngine implements Engine<RenderCompilerBundle, RenderCompilat
         issues.push({ path, code: "empty-scalar", message: `${path} MUST be non-empty after trimming.` });
       }
     }
+    for (const [path, values] of [["auxiliaryTrackArtifactIds", input.auxiliaryTrackArtifactIds], ["overrideArtifactIds", input.overrideArtifactIds]] as const) {
+      if (!Array.isArray(values) || values.some((value) => typeof value !== "string" || value.trim().length === 0) || new Set(values).size !== values.length) {
+        issues.push({ path, code: "invalid-set", message: path + " MUST contain unique non-empty strings." });
+      }
+    }
+    if (!bundle.storyboard || !Array.isArray(bundle.storyboard.scenes) || !Array.isArray(bundle.storyboard.sequences)) {
+      issues.push({ path: "storyboard", code: "invalid-storyboard", message: "Storyboard scenes and sequences MUST be arrays." });
+    }
+    if (!bundle.adapterCapabilities || canonicalHash(normalizeAdapterCapabilities(bundle.adapterCapabilities)) !== bundle.adapterCapabilitiesHash) {
+      issues.push({ path: "adapterCapabilities", code: "invalid-capabilities", message: "Capability artifact/hash is invalid." });
+    }
     if (input.schemaVersion !== "0.1") {
       issues.push({ path: "schemaVersion", code: "schema-mismatch", message: 'schemaVersion must be "0.1".' });
     }
@@ -325,6 +359,11 @@ export class RenderEngine implements Engine<RenderCompilerBundle, RenderCompilat
     // -----------------------------------------------------------------------
     // §8 Entry eligibility
     // -----------------------------------------------------------------------
+    const inputValidation = this.validate(bundle);
+    if (!inputValidation.ok) {
+      findings.push(mkFinding({ stage: "entry", reasonCode: "RENDER_COMPILER_INPUT_INVALID", outcome: "unsatisfied", criticality: "critical", affectedIds: inputValidation.issues.map((issue) => issue.path), evidence: inputValidation.issues.map((issue) => ({ kind: "reason", detail: issue.code + ": " + issue.message })), source: { kind: "entry" } }));
+      return reject("entry");
+    }
     const computedStoryboardHash = canonicalHash(storyboard);
     if (computedStoryboardHash !== bundle.storyboardContentHash || bundle.storyboardContentHash !== input.expectedStoryboardContentHash) {
       findings.push(
@@ -339,6 +378,24 @@ export class RenderEngine implements Engine<RenderCompilerBundle, RenderCompilat
         }),
       );
       return reject("entry");
+    }
+
+    const normalizedCapabilities = normalizeAdapterCapabilities(bundle.adapterCapabilities);
+    const computedCapabilitiesHash = canonicalHash(normalizedCapabilities);
+    const capabilityRangesCoherent =
+      Number.isFinite(bundle.adapterCapabilities.widthRangePx.minimum) &&
+      Number.isFinite(bundle.adapterCapabilities.widthRangePx.maximum) &&
+      Number.isFinite(bundle.adapterCapabilities.heightRangePx.minimum) &&
+      Number.isFinite(bundle.adapterCapabilities.heightRangePx.maximum) &&
+      bundle.adapterCapabilities.widthRangePx.minimum > 0 &&
+      bundle.adapterCapabilities.heightRangePx.minimum > 0 &&
+      bundle.adapterCapabilities.widthRangePx.minimum <= bundle.adapterCapabilities.widthRangePx.maximum &&
+      bundle.adapterCapabilities.heightRangePx.minimum <= bundle.adapterCapabilities.heightRangePx.maximum &&
+      Number.isInteger(bundle.adapterCapabilities.maximumLayerCountPerScene) &&
+      bundle.adapterCapabilities.maximumLayerCountPerScene > 0;
+    if (computedCapabilitiesHash !== bundle.adapterCapabilitiesHash || !capabilityRangesCoherent) {
+      findings.push(mkFinding({ stage: "capability-negotiation", reasonCode: computedCapabilitiesHash !== bundle.adapterCapabilitiesHash ? "ADAPTER_CAPABILITIES_HASH_MISMATCH" : "ADAPTER_CAPABILITIES_INVALID", outcome: "unsatisfied", criticality: "critical", affectedIds: [input.adapterCapabilitiesArtifactId], evidence: [{ kind: "hash", detail: "computed=" + computedCapabilitiesHash + " expected=" + bundle.adapterCapabilitiesHash }], source: { kind: "adapter-capability", capabilityId: "capability-artifact" } }));
+      return reject("capability-negotiation");
     }
 
     if (storyboard.gate.status === "fail") {
@@ -413,13 +470,13 @@ export class RenderEngine implements Engine<RenderCompilerBundle, RenderCompilat
         evidenceRefId: req.evidenceRefId,
         role: req.role,
         criticality: req.criticality,
-        acceptableMediaTypes: req.acceptableMediaTypes,
+        acceptableMediaTypes: sortedByCodePoint([...new Set(req.acceptableMediaTypes)], (x) => x),
         selectionPolicy: input.assetResolutionPolicy,
       };
       assetBindings.push(binding);
 
-      const sceneExists = storyboard.scenes.some((s) => s.id === req.storyboardSceneId);
-      if (!sceneExists) {
+      const targetScene = storyboard.scenes.find((s) => s.id === req.storyboardSceneId);
+      if (!targetScene) {
         findings.push(
           mkFinding({
             stage: "asset-binding",
@@ -434,28 +491,43 @@ export class RenderEngine implements Engine<RenderCompilerBundle, RenderCompilat
         if (req.criticality === "required") requiredBindingUnresolved.add(req.id);
         continue;
       }
+      if (!targetScene.requiredEvidenceRefs.includes(req.evidenceRefId)) {
+        findings.push(mkFinding({ stage: "asset-binding", reasonCode: "STORYBOARD_REFERENCE_INVALID", outcome: "unsatisfied", criticality: "critical", affectedIds: [req.id], evidence: [{ kind: "evidenceRefId", detail: req.evidenceRefId }], source: { kind: "asset-binding", bindingId: req.id } }));
+        if (req.criticality === "required") requiredBindingUnresolved.add(req.id);
+        continue;
+      }
 
       const candidates = sortedByCodePoint(
         bundle.assetCandidates.filter((c) => c.evidenceRefId === req.evidenceRefId),
         (c) => c.id,
       );
 
-      type NormalizedCandidate = RenderAssetCandidateRecord & { readonly bytes: Buffer; readonly hash: string; readonly detected: ReturnType<typeof detectMediaType> };
+      type NormalizedCandidate = RenderAssetCandidateRecord & { readonly bytes: Buffer; readonly hash: string; readonly detected: ReturnType<typeof detectMediaType>; readonly valid: boolean };
       const normalized: NormalizedCandidate[] = [];
       const seenKeys = new Set<string>();
       for (const c of candidates) {
-        const bytes = Buffer.from(c.bytesBase64, "base64");
+        const bytes = strictBase64(c.bytesBase64);
+        if (!bytes) {
+          findings.push(mkFinding({ stage: "asset-integrity", reasonCode: "ASSET_CORRUPT", outcome: "unsatisfied", criticality: req.criticality === "required" ? "critical" : "non-critical", affectedIds: [c.id], evidence: [{ kind: c.bytesBase64 ? "invalidBase64" : "missingBytes", detail: c.id }], source: { kind: "asset-integrity", candidateId: c.id } }));
+          continue;
+        }
         const hash = createHash("sha256").update(bytes).digest("hex");
-        const key = `${c.source.kind}:${c.source.sourceArtifactId}:${hash}`;
-        if (seenKeys.has(key)) continue; // §16 dedup exact source identity + content hash
-        seenKeys.add(key);
         const detected = detectMediaType(bytes);
-        normalized.push({ ...c, bytes, hash, detected });
+        const structure = detected ? inspectMediaStructure(bytes, detected) : { valid: false };
+        const dimensionsMatch = (c.declaredWidthPx === undefined || c.declaredWidthPx === structure.widthPx) && (c.declaredHeightPx === undefined || c.declaredHeightPx === structure.heightPx);
+        const valid = structure.valid && dimensionsMatch && Boolean(c.expectedContentHash) && c.expectedContentHash === hash && c.declaredByteLength === bytes.length && detected === c.declaredMediaType && req.acceptableMediaTypes.includes(c.declaredMediaType) && (c.declaredDurationMs === undefined || c.declaredDurationMs > 0);
+        const key = c.source.kind + ":" + c.source.sourceArtifactId + ":" + hash;
+        if (seenKeys.has(key)) continue;
+        seenKeys.add(key);
+        normalized.push({ ...c, bytes, hash, detected, valid });
       }
 
-      const eligible = normalized.filter((c) => req.acceptableMediaTypes.includes(c.declaredMediaType) && c.detected === c.declaredMediaType);
+      const eligible = normalized.filter((c) => c.valid);
 
       for (const c of normalized) {
+        if (!c.expectedContentHash || c.expectedContentHash !== c.hash) {
+          findings.push(mkFinding({ stage: "asset-integrity", reasonCode: "ASSET_HASH_MISMATCH", outcome: "unsatisfied", criticality: req.criticality === "required" ? "critical" : "non-critical", affectedIds: [c.id], evidence: [{ kind: "hash", detail: "expected=" + (c.expectedContentHash ?? "missing") + " actual=" + c.hash }], source: { kind: "asset-integrity", candidateId: c.id } }));
+        }
         if (c.detected === null) {
           findings.push(
             mkFinding({
@@ -480,7 +552,7 @@ export class RenderEngine implements Engine<RenderCompilerBundle, RenderCompilat
               source: { kind: "asset-integrity", candidateId: c.id },
             }),
           );
-        } else if (c.declaredByteLength !== undefined && c.declaredByteLength !== c.bytes.length) {
+        } else if (c.declaredByteLength === undefined || c.declaredByteLength !== c.bytes.length) {
           findings.push(
             mkFinding({
               stage: "asset-integrity",
@@ -599,8 +671,6 @@ export class RenderEngine implements Engine<RenderCompilerBundle, RenderCompilat
         // transform occurs; see Known Limitations in the implementation doc.
         resolvedAssets[idx] = {
           ...resolvedAssets[idx]!,
-          preparedArtifactId: deterministicId("prepared-artifact", req.id),
-          preparedContentHash: resolvedAssets[idx]!.sourceContentHash,
           preparationRequirementIds: [prepId],
         };
       }
@@ -613,7 +683,24 @@ export class RenderEngine implements Engine<RenderCompilerBundle, RenderCompilat
     // -----------------------------------------------------------------------
     // §13-14 Timing quantization
     // -----------------------------------------------------------------------
-    const orderedStoryScenes: readonly StoryScene[] = sortedByCodePoint(storyboard.scenes, (s) => s.id).sort((a, b) => a.order - b.order);
+    const sceneById = new Map(storyboard.scenes.map((scene) => [scene.id, scene]));
+    const orderedStoryScenes: StoryScene[] = [];
+    const referencedSceneIds = new Set<string>();
+    const orderedSequences = [...storyboard.sequences].sort((a, b) => a.order - b.order || codePointCompare(a.id, b.id));
+    let invalidPlayback = new Set(storyboard.scenes.map((scene) => scene.id)).size !== storyboard.scenes.length;
+    for (const sequence of orderedSequences) {
+      for (const sceneId of sequence.sceneIds) {
+        const scene = sceneById.get(sceneId);
+        if (!scene || referencedSceneIds.has(sceneId) || scene.sequenceId !== sequence.id) { invalidPlayback = true; continue; }
+        referencedSceneIds.add(sceneId);
+        orderedStoryScenes.push(scene);
+      }
+    }
+    if (referencedSceneIds.size !== storyboard.scenes.length) invalidPlayback = true;
+    if (invalidPlayback) {
+      findings.push(mkFinding({ stage: "entry", reasonCode: "STORYBOARD_REFERENCE_INVALID", outcome: "unsatisfied", criticality: "critical", affectedIds: sortedByCodePoint([...sceneById.keys()], (x) => x), evidence: [{ kind: "reason", detail: "Storyboard sequences must reference every scene exactly once with matching ownership." }], source: { kind: "entry" } }));
+      return reject("entry");
+    }
     const quantization = quantizeScenes(
       orderedStoryScenes.map((s) => ({ id: s.id, durationTargetMs: s.durationTargetMs })),
       resolvedProfile.frameRate,
@@ -664,8 +751,12 @@ export class RenderEngine implements Engine<RenderCompilerBundle, RenderCompilat
 
       for (const treq of textRequestsForScene) {
         const originalText = storyScene[treq.sourceField];
-        const charWidthFactor = treq.approxCharWidthFactor ?? DEFAULT_CHAR_WIDTH_FACTOR;
-        let fittingSize = greatestFittingFontSize(originalText, treq.minFontSizePx, treq.maxFontSizePx, charWidthFactor, treq.geometry.widthPx, treq.geometry.heightPx);
+        const fontToken: FontToken = treq.fontToken ?? "dps-sans-regular-v1";
+        if (!(fontToken in FONT_WIDTH_UNITS)) {
+          findings.push(mkFinding({ stage: "layout", reasonCode: "RENDER_COMPILER_INPUT_INVALID", outcome: "unsatisfied", criticality: "critical", affectedIds: [treq.id], evidence: [{ kind: "reason", detail: "Unsupported immutable font token." }], source: { kind: "plan-structure", planElementId: treq.id } }));
+          return reject("layout");
+        }
+        let fittingSize = greatestFittingFontSize(originalText, treq.minFontSizePx, treq.maxFontSizePx, fontToken, treq.geometry.widthPx, treq.geometry.heightPx);
         let resolvedText = originalText;
         let usedVariantId: string | undefined;
 
@@ -675,7 +766,7 @@ export class RenderEngine implements Engine<RenderCompilerBundle, RenderCompilat
             return codePointCompare(a.id, b.id);
           });
           for (const variant of orderedVariants) {
-            const size = greatestFittingFontSize(variant.text, treq.minFontSizePx, treq.maxFontSizePx, charWidthFactor, treq.geometry.widthPx, treq.geometry.heightPx);
+            const size = greatestFittingFontSize(variant.text, treq.minFontSizePx, treq.maxFontSizePx, fontToken, treq.geometry.widthPx, treq.geometry.heightPx);
             if (size !== null) {
               fittingSize = size;
               resolvedText = variant.text;
@@ -693,7 +784,7 @@ export class RenderEngine implements Engine<RenderCompilerBundle, RenderCompilat
               outcome: "unsatisfied",
               criticality: treq.criticality === "required" ? "critical" : "non-critical",
               affectedIds: [treq.id],
-              evidence: [{ kind: "text", detail: originalText }],
+              evidence: [{ kind: "textMeasurement", detail: "source=" + storyScene.id + ":" + treq.sourceField + ";sha256=" + createHash("sha256").update(originalText, "utf8").digest("hex") + ";box=" + treq.geometry.widthPx + "x" + treq.geometry.heightPx }],
               source: { kind: "constraint", constraintId: deterministicId("constraint", treq.id, "text-fit") },
             }),
           );
@@ -709,9 +800,11 @@ export class RenderEngine implements Engine<RenderCompilerBundle, RenderCompilat
           criticality: treq.criticality,
           styleTokenIds: [],
           constraintIds: [],
-          source: { kind: "storyboard-authorized", storyboardSceneId: storyScene.id, sourceField: treq.sourceField },
+          source: usedVariantId ? { kind: "approved-variant", auxiliaryArtifactId: treq.approvedVariants!.find((v) => v.id === usedVariantId)!.textSourceArtifactId, variantId: usedVariantId } : { kind: "storyboard-authorized", storyboardSceneId: storyScene.id, sourceField: treq.sourceField },
           resolvedText,
           resolvedFontSizePx: fittingSize,
+          fontToken,
+          measurementEngine: TEXT_MEASUREMENT_ENGINE,
           ...(usedVariantId ? { usedVariantId } : {}),
         });
       }
@@ -896,7 +989,7 @@ export class RenderEngine implements Engine<RenderCompilerBundle, RenderCompilat
     // -----------------------------------------------------------------------
     // §29-30 Capability negotiation
     // -----------------------------------------------------------------------
-    const caps = bundle.adapterCapabilities;
+    const caps = normalizedCapabilities;
     const usedLayerKinds = new Set(renderScenes.flatMap((s) => s.layers.map((l) => l.kind)));
     for (const kind of usedLayerKinds) {
       if (!caps.supportedLayerKinds.includes(kind)) {
@@ -1030,9 +1123,10 @@ export class RenderEngine implements Engine<RenderCompilerBundle, RenderCompilat
       "render-plan",
       bundle.storyboardContentHash,
       resolvedProfileHash,
-      bundle.adapterCapabilitiesHash,
       quantization.manifest.totalFrames,
     );
+    const { adapterCapabilitiesArtifactId: _capArtifact, adapterVersion: _adapterVersion, adapterCapabilitiesHash: _capHash, ...planProvenance } = provenance;
+    const canonicalPlanProvenance = { ...planProvenance, dependencyArtifactIds: planProvenance.dependencyArtifactIds.filter((id) => id !== input.adapterCapabilitiesArtifactId) };
     const plan: RenderPlan = {
       schemaVersion: "0.1",
       id: planId,
@@ -1047,7 +1141,7 @@ export class RenderEngine implements Engine<RenderCompilerBundle, RenderCompilat
       preparationRequirements,
       constraints,
       requiredCapabilityIds,
-      provenance,
+      provenance: canonicalPlanProvenance,
     };
 
     // -----------------------------------------------------------------------
@@ -1112,7 +1206,7 @@ export class RenderEngine implements Engine<RenderCompilerBundle, RenderCompilat
 
     this.lastMetrics = { inputArtifacts: 1, outputArtifacts: status === "fail" ? 2 : 3, warnings: warnings.length };
 
-    return { kind: "compiled", plan: { ...plan, provenance: finalProvenance }, resolvedAssets, preparationRequirements, gate };
+    return { kind: "compiled", plan, resolvedAssets, preparationRequirements, gate };
   }
 
   verify(output: RenderCompilationResult): VerificationResult {

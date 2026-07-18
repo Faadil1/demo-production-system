@@ -1,11 +1,14 @@
+import { createHash } from "node:crypto";
 import type { Storyboard, StoryScene } from "../../src/core/story.js";
-import { canonicalHash } from "../../src/core/render-canonical.js";
+import { canonicalHash, normalizeAdapterCapabilities } from "../../src/core/render-canonical.js";
 import { DPS_LANDSCAPE_1080P30_V01, type AdapterCapabilities, type RenderCompilerInput } from "../../src/core/render.js";
 import type { RenderAssetCandidateRecord, RenderBindingRequest, RenderCompilerBundle, RenderTextLayerRequest } from "../../src/core/render-input.js";
 
 // A 1x1 red PNG, base64-encoded — a genuine minimal valid PNG byte stream.
 export const ONE_PX_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+export const ONE_PX_PNG_HASH = createHash("sha256").update(Buffer.from(ONE_PX_PNG_BASE64, "base64")).digest("hex");
+export const ONE_PX_PNG_LENGTH = Buffer.from(ONE_PX_PNG_BASE64, "base64").length;
 
 function scene(args: {
   readonly id: string;
@@ -27,7 +30,7 @@ function scene(args: {
     priority: "critical",
     durationTargetMs: args.durationTargetMs,
     durationRangeMs: { minimum: 500, maximum: 10000 },
-    requiredEvidenceRefs: [],
+    requiredEvidenceRefs: args.id === "scene-a" ? ["ev-1", "ev-missing", "ev-optional-missing", "ev-x", "ev-missing-required"] : [],
     requiredClaimIds: [],
     requiredObservationIds: [],
     mustAppear: true,
@@ -177,7 +180,7 @@ export function buildBundle(args: {
     storyboard: args.storyboard,
     storyboardContentHash,
     adapterCapabilities,
-    adapterCapabilitiesHash: canonicalHash(adapterCapabilities),
+    adapterCapabilitiesHash: canonicalHash(normalizeAdapterCapabilities(adapterCapabilities)),
     assetCandidates: args.assetCandidates ?? [],
     assetBindingRequests: args.assetBindingRequests ?? [],
     textLayerRequests: args.textLayerRequests ?? [],

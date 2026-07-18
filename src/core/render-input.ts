@@ -25,7 +25,9 @@ export type RenderAssetCandidateRecord = {
   readonly evidenceRefId: string;
   readonly source: RenderAssetSource;
   readonly declaredMediaType: RenderMediaType;
-  readonly bytesBase64: string;
+  readonly bytesBase64?: string;
+  /** Authoritative provenance hash. Candidates without it are never eligible. */
+  readonly expectedContentHash?: string;
   readonly declaredByteLength?: number;
   readonly declaredWidthPx?: number;
   readonly declaredHeightPx?: number;
@@ -61,8 +63,8 @@ export type RenderTextLayerRequest = {
   readonly criticality: "required" | "optional";
   readonly maxFontSizePx: number;
   readonly minFontSizePx: number;
-  /** approximate px-per-character-per-font-size-unit for the deterministic measurement model */
-  readonly approxCharWidthFactor?: number;
+  /** Closed immutable font token; defaults to dps-sans-regular-v1. */
+  readonly fontToken?: "dps-sans-regular-v1" | "dps-sans-semibold-v1" | "dps-mono-regular-v1";
   readonly approvedVariants?: readonly ApprovedTextVariant[];
 };
 

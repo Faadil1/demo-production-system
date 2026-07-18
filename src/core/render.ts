@@ -171,11 +171,11 @@ export type AssetPreparationRequirement = {
 
 export type QuantizedBoundary = {
   readonly index: number;
-  readonly exactNumerator: number;
-  readonly exactDenominator: number;
+  readonly exactNumerator: string;
+  readonly exactDenominator: string;
   readonly quantizedFrame: number;
-  readonly deltaNumerator: number;
-  readonly deltaDenominator: number;
+  readonly deltaNumerator: string;
+  readonly deltaDenominator: string;
 };
 
 export type RenderTimingManifest = {
@@ -274,6 +274,8 @@ export type RenderTextLayer = RenderLayerBase & {
   readonly source: RenderTextSource;
   readonly resolvedText: string;
   readonly resolvedFontSizePx: number;
+  readonly fontToken: "dps-sans-regular-v1" | "dps-sans-semibold-v1" | "dps-mono-regular-v1";
+  readonly measurementEngine: { readonly id: "dps-conservative-text"; readonly version: "1" };
   readonly usedVariantId?: string;
 };
 
@@ -404,7 +406,7 @@ export type RenderPlan = {
   readonly preparationRequirements: readonly AssetPreparationRequirement[];
   readonly constraints: readonly RenderConstraint[];
   readonly requiredCapabilityIds: readonly string[];
-  readonly provenance: RenderProvenance;
+  readonly provenance: Omit<RenderProvenance, "adapterCapabilitiesArtifactId" | "adapterVersion" | "adapterCapabilitiesHash">;
 };
 
 // ---------------------------------------------------------------------------
@@ -464,7 +466,26 @@ export type RenderFinding = {
 };
 
 export type RenderFindingEvidence = {
-  readonly kind: string;
+  readonly kind:
+    | "detail"
+    | "hash"
+    | "reason"
+    | "requirement"
+    | "story-gate-blocking-reason"
+    | "storyboardSceneId"
+    | "evidenceRefId"
+    | "candidateCount"
+    | "candidateId"
+    | "declaredMediaType"
+    | "mediaTypeMismatch"
+    | "byteLengthMismatch"
+    | "invalidBase64"
+    | "missingBytes"
+    | "sceneIndex"
+    | "geometry"
+    | "dimensions"
+    | "layerCount"
+    | "textMeasurement";
   readonly detail: string;
 };
 

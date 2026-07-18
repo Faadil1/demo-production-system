@@ -59,3 +59,36 @@ export function detectMediaType(bytes: Buffer): RenderMediaType | null {
   }
   return null;
 }
+export type MediaStructure = {
+  readonly valid: boolean;
+  readonly widthPx?: number;
+  readonly heightPx?: number;
+};
+
+/** Minimum deterministic structural validation; no decode/render work is performed. */
+export function inspectMediaStructure(bytes: Buffer, mediaType: RenderMediaType): MediaStructure {
+  switch (mediaType) {
+    case "image/png": {
+      if (bytes.length < 24 || bytes.toString("ascii", 12, 16) !== "IHDR") return { valid: false };
+      const widthPx = bytes.readUInt32BE(16);
+      const heightPx = bytes.readUInt32BE(20);
+      return widthPx > 0 && heightPx > 0 ? { valid: true, widthPx, heightPx } : { valid: false };
+    }
+    case "image/jpeg":
+      return { valid: bytes.length >= 4 && bytes[bytes.length - 2] === 0xff && bytes[bytes.length - 1] === 0xd9 };
+    case "image/webp":
+      return { valid: bytes.length >= 20 && bytes.readUInt32LE(4) + 8 === bytes.length };
+    case "audio/wav":
+      return { valid: bytes.length >= 44 && bytes.readUInt32LE(4) + 8 === bytes.length };
+    case "audio/mp3":
+      return { valid: bytes.length >= 10 };
+    case "video/mp4":
+      return { valid: bytes.length >= 16 && bytes.readUInt32BE(0) >= 8 && bytes.readUInt32BE(0) <= bytes.length };
+    case "video/webm":
+      return { valid: bytes.length >= 8 };
+    case "font/ttf":
+      return { valid: bytes.length >= 12 };
+    case "font/woff2":
+      return { valid: bytes.length >= 48 && bytes.readUInt32BE(8) === bytes.length };
+  }
+}

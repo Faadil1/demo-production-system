@@ -27,11 +27,11 @@ export function quantizeScenes(scenes: readonly QuantizationScene[], fps: FrameR
     const delta = sub({ numerator: quantized[i]!, denominator: 1n }, e);
     return {
       index: i,
-      exactNumerator: Number(e.numerator),
-      exactDenominator: Number(e.denominator),
+      exactNumerator: e.numerator.toString(10),
+      exactDenominator: e.denominator.toString(10),
       quantizedFrame: Number(quantized[i]!),
-      deltaNumerator: Number(delta.numerator),
-      deltaDenominator: Number(delta.denominator),
+      deltaNumerator: delta.numerator.toString(10),
+      deltaDenominator: delta.denominator.toString(10),
     };
   });
 

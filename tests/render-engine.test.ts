@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { RenderEngine } from "../src/engines/render.js";
 import { canonicalHash, canonicalStringify } from "../src/core/render-canonical.js";
-import { buildBundle, defaultAdapterCapabilities, ONE_PX_PNG_BASE64, twoSceneStoryboard } from "./fixtures/render-fixtures.js";
+import { buildBundle, defaultAdapterCapabilities, ONE_PX_PNG_BASE64, ONE_PX_PNG_HASH, ONE_PX_PNG_LENGTH, twoSceneStoryboard } from "./fixtures/render-fixtures.js";
 import type { RenderAssetCandidateRecord, RenderBindingRequest } from "../src/core/render-input.js";
 
 const context = { runId: "run-test", now: () => new Date("2026-07-17T00:00:00Z") };
@@ -14,8 +14,10 @@ function pngCandidate(id: string, evidenceRefId: string, overrides: Partial<Rend
     source: { kind: "artifact", sourceArtifactId: `artifact-${id}` },
     declaredMediaType: "image/png",
     bytesBase64: ONE_PX_PNG_BASE64,
-    declaredWidthPx: 100,
-    declaredHeightPx: 100,
+    expectedContentHash: ONE_PX_PNG_HASH,
+    declaredByteLength: ONE_PX_PNG_LENGTH,
+    declaredWidthPx: 1,
+    declaredHeightPx: 1,
     ...overrides,
   };
 }
