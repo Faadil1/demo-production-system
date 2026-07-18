@@ -8,10 +8,12 @@ import { quantizeScenes } from "../core/frame-quantization.js";
 import { frameRateToExact, compare as compareRational } from "../core/rational.js";
 import type { RenderAssetCandidateRecord, RenderBindingRequest, RenderCompilerBundle, RenderTextLayerRequest } from "../core/render-input.js";
 import {
+  ENTRY_REQUIREMENT_CLASSIFICATION_POLICY,
   LAYER_KIND_RANK,
   OVERRIDE_ALLOWLISTED_REASON_CODES,
   PIPELINE_STAGE_RANK,
   type AssetPreparationRequirement,
+  type EntryRequirementClassification,
   type RenderAllowedNextAction,
   type RenderAssetBinding,
   type RenderConstraint,
@@ -50,27 +52,35 @@ export type RenderCompilationResult =
     };
 
 // ---------------------------------------------------------------------------
-// §8 closed entry-requirement classification policy v0.1
+// §8 typed entry-requirement classification authority
 // ---------------------------------------------------------------------------
 
-const ENTRY_REQUIREMENT_CLASSIFICATION_POLICY = {
-  id: "entry-requirement-classification-policy",
-  version: "0.1",
-} as const;
+function entryRequirementClassificationKey(record: { readonly requirementIndex?: number; readonly requirementHash?: string } | undefined): string {
+  const requirementIndex = record?.requirementIndex;
+  const index = typeof requirementIndex === "number" && Number.isInteger(requirementIndex) && requirementIndex >= 0 ? String(requirementIndex).padStart(12, "0") : "~~~~~~~~~~~~";
+  const hash = typeof record?.requirementHash === "string" ? record.requirementHash : "";
+  return `${index}\u0000${hash}`;
+}
 
-// Closed set of renderer-bound requirement patterns (case-insensitive word boundary match).
-// Per §8 line 225, eligibility MUST be determined from a versioned closed mapping.
-// Requirements matching these patterns are renderer-bound; all others are narrative.
-const RENDERER_BOUND_REQUIREMENT_PATTERNS: readonly RegExp[] = [
-  /\brecapture\b/i,
-  /\boutput\s+profile\b/i,
-  /\bprepare\s+(asset|auxiliary)\b/i,
-  /\blayout\s+(requirement|constraint)\b/i,
-  /\bcapability\s+(requirement|constraint)\b/i,
-];
+function isEntryRequirementClassification(record: unknown): record is EntryRequirementClassification {
+  if (!record || typeof record !== "object") return false;
+  const candidate = record as EntryRequirementClassification;
+  const policy = candidate.policy;
+  return (
+    typeof candidate.storyboardArtifactId === "string" &&
+    typeof candidate.storyboardContentHash === "string" &&
+    Number.isInteger(candidate.requirementIndex) &&
+    candidate.requirementIndex >= 0 &&
+    typeof candidate.requirementHash === "string" &&
+    (candidate.classification === "renderer-bound" || candidate.classification === "narrative") &&
+    policy !== undefined &&
+    policy.id === ENTRY_REQUIREMENT_CLASSIFICATION_POLICY.id &&
+    policy.version === ENTRY_REQUIREMENT_CLASSIFICATION_POLICY.version
+  );
+}
 
-function classifyEntryRequirement(text: string): "renderer-bound" | "narrative" {
-  return RENDERER_BOUND_REQUIREMENT_PATTERNS.some((p) => p.test(text)) ? "renderer-bound" : "narrative";
+function entryRequirementHash(requirement: string): string {
+  return canonicalHash(requirement);
 }
 
 // ---------------------------------------------------------------------------
@@ -307,6 +317,9 @@ export class RenderEngine implements Engine<RenderCompilerBundle, RenderCompilat
     if (!bundle.adapterCapabilities || canonicalHash(normalizeAdapterCapabilities(bundle.adapterCapabilities)) !== bundle.adapterCapabilitiesHash) {
       issues.push({ path: "adapterCapabilities", code: "invalid-capabilities", message: "Capability artifact/hash is invalid." });
     }
+    if (!Array.isArray(input.entryRequirementClassifications)) {
+      issues.push({ path: "input.entryRequirementClassifications", code: "invalid-entry-classifications", message: "entryRequirementClassifications MUST be an array." });
+    }
     if (input.schemaVersion !== "0.1") {
       issues.push({ path: "schemaVersion", code: "schema-mismatch", message: 'schemaVersion must be "0.1".' });
     }
@@ -316,6 +329,9 @@ export class RenderEngine implements Engine<RenderCompilerBundle, RenderCompilat
   async run(bundle: RenderCompilerBundle, _context: EngineContext): Promise<RenderCompilationResult> {
     const findings: RenderFinding[] = [];
     const { input, storyboard } = bundle;
+
+    const rawEntryRequirementClassifications: readonly EntryRequirementClassification[] = Array.isArray(input.entryRequirementClassifications) ? input.entryRequirementClassifications : [];
+    const canonicalEntryRequirementClassifications = sortedByCodePoint([...rawEntryRequirementClassifications], entryRequirementClassificationKey);
 
     const provenanceBase = () => {
       const policies = [input.assetResolutionPolicy, input.transitionPolicy, input.layoutPolicy];
@@ -329,6 +345,8 @@ export class RenderEngine implements Engine<RenderCompilerBundle, RenderCompilat
         storyboardArtifactId: input.storyboardArtifactId,
         storyboardSchemaVersion: storyboard.schemaVersion,
         storyboardContentHash: bundle.storyboardContentHash,
+        entryRequirementClassificationPolicy: ENTRY_REQUIREMENT_CLASSIFICATION_POLICY,
+        entryRequirementClassifications: canonicalEntryRequirementClassifications,
         outputProfileSource: input.outputProfile,
         resolvedOutputProfileId: resolvedProfileId,
         resolvedOutputProfileVersion: resolvedProfileVersion,
@@ -421,18 +439,121 @@ export class RenderEngine implements Engine<RenderCompilerBundle, RenderCompilat
       return reject("entry");
     }
 
-    if (storyboard.gate.status === "conditional") {
-      for (const requirement of storyboard.gate.requirementsBeforeRender) {
-        if (classifyEntryRequirement(requirement) !== "renderer-bound") {
+    const entryRequirements = storyboard.gate.requirementsBeforeRender;
+    if (storyboard.gate.status === "conditional" || canonicalEntryRequirementClassifications.length > 0) {
+      const classificationByIndex = new Map<number, EntryRequirementClassification>();
+      for (const record of canonicalEntryRequirementClassifications) {
+        if (!isEntryRequirementClassification(record)) {
+          findings.push(
+            mkFinding({
+              stage: "entry",
+              reasonCode: "RENDER_COMPILER_INPUT_INVALID",
+              outcome: "unsatisfied",
+              criticality: "critical",
+              affectedIds: [input.storyboardArtifactId],
+              evidence: [{ kind: "reason", detail: "entryRequirementClassifications contains an invalid typed authority record." }],
+              source: { kind: "entry", inputField: "entryRequirementClassifications" },
+            }),
+          );
+          return reject("entry");
+        }
+
+        if (record.storyboardArtifactId !== input.storyboardArtifactId || record.storyboardContentHash !== bundle.storyboardContentHash) {
+          findings.push(
+            mkFinding({
+              stage: "entry",
+              reasonCode: "RENDER_COMPILER_INPUT_INVALID",
+              outcome: "unsatisfied",
+              criticality: "critical",
+              affectedIds: [input.storyboardArtifactId],
+              evidence: [{ kind: "hash", detail: `classification=${record.storyboardContentHash} storyboard=${bundle.storyboardContentHash}` }],
+              source: { kind: "entry", inputField: "entryRequirementClassifications" },
+            }),
+          );
+          return reject("entry");
+        }
+
+        if (record.requirementIndex >= entryRequirements.length) {
+          findings.push(
+            mkFinding({
+              stage: "entry",
+              reasonCode: "RENDER_COMPILER_INPUT_INVALID",
+              outcome: "unsatisfied",
+              criticality: "critical",
+              affectedIds: [input.storyboardArtifactId],
+              evidence: [{ kind: "reason", detail: `unknown requirement index ${record.requirementIndex}.` }],
+              source: { kind: "entry", inputField: "entryRequirementClassifications" },
+            }),
+          );
+          return reject("entry");
+        }
+
+        if (classificationByIndex.has(record.requirementIndex)) {
+          findings.push(
+            mkFinding({
+              stage: "entry",
+              reasonCode: "RENDER_COMPILER_INPUT_INVALID",
+              outcome: "unsatisfied",
+              criticality: "critical",
+              affectedIds: [input.storyboardArtifactId],
+              evidence: [{ kind: "reason", detail: `duplicate classification for requirement index ${record.requirementIndex}.` }],
+              source: { kind: "entry", inputField: "entryRequirementClassifications" },
+            }),
+          );
+          return reject("entry");
+        }
+
+        classificationByIndex.set(record.requirementIndex, record);
+      }
+
+      for (let index = 0; index < entryRequirements.length; index++) {
+        const requirement = entryRequirements[index]!;
+        const record = classificationByIndex.get(index);
+        if (!record) {
+          findings.push(
+            mkFinding({
+              stage: "entry",
+              reasonCode: "RENDER_COMPILER_INPUT_INVALID",
+              outcome: "unsatisfied",
+              criticality: "critical",
+              affectedIds: [input.storyboardArtifactId],
+              evidence: [{ kind: "reason", detail: `missing classification for requirement index ${index}.` }],
+              source: { kind: "entry", inputField: "entryRequirementClassifications" },
+            }),
+          );
+          return reject("entry");
+        }
+
+        const expectedHash = entryRequirementHash(requirement);
+        if (record.requirementHash !== expectedHash) {
+          findings.push(
+            mkFinding({
+              stage: "entry",
+              reasonCode: "RENDER_COMPILER_INPUT_INVALID",
+              outcome: "unsatisfied",
+              criticality: "critical",
+              affectedIds: [input.storyboardArtifactId],
+              evidence: [{ kind: "hash", detail: `classification=${record.requirementHash} requirement=${expectedHash}` }],
+              source: { kind: "entry", inputField: "entryRequirementClassifications" },
+            }),
+          );
+          return reject("entry");
+        }
+
+        if (record.classification === "narrative") {
           findings.push(
             mkFinding({
               stage: "entry",
               reasonCode: "STORY_GATE_REQUIREMENT_NOT_RENDERER_BOUND",
               outcome: "unsatisfied",
               criticality: "critical",
-              affectedIds: [input.storyboardArtifactId],
-              evidence: [{ kind: "requirement", detail: requirement }],
-              source: { kind: "entry" },
+              affectedIds: [input.storyboardArtifactId, String(index)],
+              evidence: [
+                { kind: "requirement", detail: requirement },
+                { kind: "hash", detail: `requirementHash=${expectedHash}` },
+                { kind: "reason", detail: `classification=${record.classification}` },
+              ],
+              source: { kind: "entry", inputField: "entryRequirementClassifications" },
             }),
           );
           return reject("entry");

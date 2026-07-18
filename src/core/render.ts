@@ -14,6 +14,20 @@ export type VersionedPolicyReference = {
   readonly version: string;
 };
 
+export const ENTRY_REQUIREMENT_CLASSIFICATION_POLICY = {
+  id: "entry-requirement-classification-policy",
+  version: "0.1",
+} as const;
+
+export type EntryRequirementClassification = {
+  readonly storyboardArtifactId: string;
+  readonly storyboardContentHash: string;
+  readonly requirementIndex: number;
+  readonly requirementHash: string;
+  readonly classification: "renderer-bound" | "narrative";
+  readonly policy: VersionedPolicyReference;
+};
+
 export type RenderCompilerInput = {
   readonly schemaVersion: "0.1";
   readonly storyboardArtifactId: string;
@@ -22,6 +36,7 @@ export type RenderCompilerInput = {
   readonly assetResolutionPolicy: VersionedPolicyReference;
   readonly transitionPolicy: VersionedPolicyReference;
   readonly layoutPolicy: VersionedPolicyReference;
+  readonly entryRequirementClassifications: readonly EntryRequirementClassification[];
   readonly adapterCapabilitiesArtifactId: string;
   readonly auxiliaryTrackArtifactIds: readonly string[];
   readonly overrideArtifactIds: readonly string[];
@@ -376,6 +391,8 @@ export type RenderProvenance = {
   readonly storyboardArtifactId: string;
   readonly storyboardSchemaVersion: string;
   readonly storyboardContentHash: string;
+  readonly entryRequirementClassificationPolicy: VersionedPolicyReference;
+  readonly entryRequirementClassifications: readonly EntryRequirementClassification[];
   readonly outputProfileSource: RenderOutputProfileReference;
   readonly resolvedOutputProfileId: string;
   readonly resolvedOutputProfileVersion: string;

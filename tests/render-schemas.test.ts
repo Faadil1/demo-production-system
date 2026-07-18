@@ -42,6 +42,15 @@ describe("RFC-0006 runtime JSON schemas — Appendix B inventory", () => {
     expect(validate(bundle.input)).toBe(true);
   });
 
+  it("rejects RenderCompilerInput when entryRequirementClassifications is missing", () => {
+    const ajv = makeAjv();
+    ajv.addSchema(loadSchema("render-compiler-input.schema.json"), "render-compiler-input.schema.json");
+    const validate = ajv.getSchema("render-compiler-input.schema.json")!;
+    const bundle = buildBundle({ storyboard: twoSceneStoryboard() });
+    const { entryRequirementClassifications: _omit, ...withoutClassifications } = bundle.input as Record<string, unknown>;
+    expect(validate(withoutClassifications)).toBe(false);
+  });
+
   it("rejects RenderCompilerInput with an empty required scalar", () => {
     const ajv = makeAjv();
     ajv.addSchema(loadSchema("render-compiler-input.schema.json"), "render-compiler-input.schema.json");

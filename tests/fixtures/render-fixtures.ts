@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Storyboard, StoryScene } from "../../src/core/story.js";
 import { canonicalHash, normalizeAdapterCapabilities } from "../../src/core/render-canonical.js";
-import { DPS_LANDSCAPE_1080P30_V01, type AdapterCapabilities, type RenderCompilerInput } from "../../src/core/render.js";
+import { DPS_LANDSCAPE_1080P30_V01, ENTRY_REQUIREMENT_CLASSIFICATION_POLICY, type AdapterCapabilities, type EntryRequirementClassification, type RenderCompilerInput } from "../../src/core/render.js";
 import type { RenderAssetCandidateRecord, RenderBindingRequest, RenderCompilerBundle, RenderTextLayerRequest } from "../../src/core/render-input.js";
 
 // A 1x1 red PNG, base64-encoded — a genuine minimal valid PNG byte stream.
@@ -147,6 +147,23 @@ export function defaultAdapterCapabilities(overrides: Partial<AdapterCapabilitie
   };
 }
 
+export function entryRequirementClassification(args: {
+  readonly storyboardArtifactId: string;
+  readonly storyboardContentHash: string;
+  readonly requirementIndex: number;
+  readonly requirement: string;
+  readonly classification: EntryRequirementClassification["classification"];
+}): EntryRequirementClassification {
+  return {
+    storyboardArtifactId: args.storyboardArtifactId,
+    storyboardContentHash: args.storyboardContentHash,
+    requirementIndex: args.requirementIndex,
+    requirementHash: canonicalHash(args.requirement),
+    classification: args.classification,
+    policy: ENTRY_REQUIREMENT_CLASSIFICATION_POLICY,
+  };
+}
+
 export function defaultInput(overrides: Partial<RenderCompilerInput> = {}): RenderCompilerInput {
   return {
     schemaVersion: "0.1",
@@ -156,6 +173,7 @@ export function defaultInput(overrides: Partial<RenderCompilerInput> = {}): Rend
     assetResolutionPolicy: { id: "default-asset-policy", version: "0.1" },
     transitionPolicy: { id: "minimal-transition-policy", version: "0.1" },
     layoutPolicy: { id: "minimal-layout-policy", version: "0.1" },
+    entryRequirementClassifications: [],
     adapterCapabilitiesArtifactId: "adapter-capabilities-fixture",
     auxiliaryTrackArtifactIds: [],
     overrideArtifactIds: [],

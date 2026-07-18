@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { RenderEngine } from "../src/engines/render.js";
 import { canonicalHash, canonicalStringify } from "../src/core/render-canonical.js";
-import { buildBundle, defaultAdapterCapabilities, ONE_PX_PNG_BASE64, ONE_PX_PNG_HASH, ONE_PX_PNG_LENGTH, twoSceneStoryboard } from "./fixtures/render-fixtures.js";
+import { buildBundle, defaultAdapterCapabilities, entryRequirementClassification, ONE_PX_PNG_BASE64, ONE_PX_PNG_HASH, ONE_PX_PNG_LENGTH, twoSceneStoryboard } from "./fixtures/render-fixtures.js";
 import type { RenderAssetCandidateRecord, RenderBindingRequest } from "../src/core/render-input.js";
 
 const context = { runId: "run-test", now: () => new Date("2026-07-17T00:00:00Z") };
@@ -57,7 +57,7 @@ describe("RFC-0006 RenderEngine — Case A (rejection)", () => {
     const result = await new RenderEngine().run(bundle, context);
     expect(result.kind).toBe("rejected");
     if (result.kind !== "rejected") return;
-    expect(result.rejection.reasonCodes).toContain("STORY_GATE_REQUIREMENT_NOT_RENDERER_BOUND");
+    expect(result.rejection.reasonCodes).toContain("RENDER_COMPILER_INPUT_INVALID");
   });
 
   it("admits a Story Gate conditional entry when every requirement is renderer-bound", async () => {
@@ -65,7 +65,21 @@ describe("RFC-0006 RenderEngine — Case A (rejection)", () => {
       ...twoSceneStoryboard(),
       gate: { status: "conditional" as const, blockingReasons: [], warnings: [], requirementsBeforeRender: ["Recapture the hero asset."] },
     };
-    const bundle = buildBundle({ storyboard });
+    const storyboardContentHash = canonicalHash(storyboard);
+    const bundle = buildBundle({
+      storyboard,
+      inputOverrides: {
+        entryRequirementClassifications: [
+          entryRequirementClassification({
+            storyboardArtifactId: storyboard.id,
+            storyboardContentHash,
+            requirementIndex: 0,
+            requirement: storyboard.gate.requirementsBeforeRender[0]!,
+            classification: "renderer-bound",
+          }),
+        ],
+      },
+    });
     const result = await new RenderEngine().run(bundle, context);
     expect(result.kind).toBe("compiled");
   });

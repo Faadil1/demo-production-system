@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { RenderEngine } from "../src/engines/render.js";
 import { canonicalHash, canonicalStringify } from "../src/core/render-canonical.js";
@@ -6,6 +7,7 @@ import type { RenderAssetCandidateRecord, RenderBindingRequest } from "../src/co
 import {
   buildBundle,
   defaultAdapterCapabilities,
+  entryRequirementClassification,
   minimalStoryboard,
   ONE_PX_PNG_BASE64,
   ONE_PX_PNG_HASH,
@@ -156,49 +158,116 @@ describe("RFC-0006 corrective packet", () => {
     }
   });
 
-  it("rejects non-renderer-bound conditional entry requirements", async () => {
-    // A narrative requirement (narrative gate classification, not renderer-bound patterns)
-    // must reject conditional entry. Versioned closed policy must enforce the distinction
-    // between narrative and renderer-bound requirements per RFC §8.
-    const board = twoSceneStoryboard();
+  it.each([
+    "We need to recapture the narrative tension in the opening scene.",
+    "This requirement mentions recapture, output profile, prepare asset, layout requirement, and capability constraint.",
+  ])("rejects %s without explicit classification", async (requirement) => {
     const storyboard: Storyboard = {
-      ...board,
-      gate: { ...board.gate, status: "conditional", requirementsBeforeRender: ["Supply a verified ProofChain for every critical claim."] },
+      ...twoSceneStoryboard(),
+      gate: { status: "conditional", blockingReasons: [], warnings: [], requirementsBeforeRender: [requirement] },
     };
     const result = await new RenderEngine().run(buildBundle({ storyboard }), context);
+    expect(result.kind).toBe("rejected");
+  });
+
+  it("rejects explicitly narrative conditional classifications", async () => {
+    const storyboard: Storyboard = {
+      ...twoSceneStoryboard(),
+      gate: { status: "conditional", blockingReasons: [], warnings: [], requirementsBeforeRender: ["Supply a verified ProofChain for every critical claim."] },
+    };
+    const bundle = buildBundle({
+      storyboard,
+      inputOverrides: {
+        entryRequirementClassifications: [
+          entryRequirementClassification({
+            storyboardArtifactId: storyboard.id,
+            storyboardContentHash: canonicalHash(storyboard),
+            requirementIndex: 0,
+            requirement: storyboard.gate.requirementsBeforeRender[0]!,
+            classification: "narrative",
+          }),
+        ],
+      },
+    });
+    const result = await new RenderEngine().run(bundle, context);
     expect(result.kind).toBe("rejected");
     if (result.kind === "rejected") expect(result.rejection.reasonCodes).toContain("STORY_GATE_REQUIREMENT_NOT_RENDERER_BOUND");
   });
 
-  it("verifies a conditional Render Gate result has no blocking findings and remains technically executable", async () => {
-    // A conditional plan MUST remain technically executable, per §33.
-    // Executability is proven by the absence of blocking (critical) findings.
-    // An optional unavailable asset produces a non-critical warning, not a blocking finding,
-    // so the conditional gate remains valid and executable.
-    const board = twoSceneStoryboard();
+  it("rejects missing, duplicate, unknown, and stale classifications", async () => {
     const storyboard: Storyboard = {
-      ...board,
-      gate: { ...board.gate, status: "conditional", requirementsBeforeRender: ["Recapture the hero asset."] },
+      ...twoSceneStoryboard(),
+      gate: { status: "conditional", blockingReasons: [], warnings: [], requirementsBeforeRender: ["Recapture the hero asset.", "Select the output profile."] },
     };
-    const result = await new RenderEngine().run(buildBundle({
+    const requirement0 = storyboard.gate.requirementsBeforeRender[0]!;
+    const requirement1 = storyboard.gate.requirementsBeforeRender[1]!;
+    const shared = {
+      storyboardArtifactId: storyboard.id,
+      storyboardContentHash: canonicalHash(storyboard),
+    };
+    const valid0 = entryRequirementClassification({ ...shared, requirementIndex: 0, requirement: requirement0, classification: "renderer-bound" });
+    const valid1 = entryRequirementClassification({ ...shared, requirementIndex: 1, requirement: requirement1, classification: "renderer-bound" });
+
+    const duplicateBundle = buildBundle({ storyboard, inputOverrides: { entryRequirementClassifications: [valid0, { ...valid0 }] } });
+    const unknownBundle = buildBundle({ storyboard, inputOverrides: { entryRequirementClassifications: [{ ...valid0, requirementIndex: 9 }] } });
+    const missingBundle = buildBundle({ storyboard, inputOverrides: { entryRequirementClassifications: [valid0] } });
+    const staleRequirementBundle = buildBundle({ storyboard, inputOverrides: { entryRequirementClassifications: [{ ...valid0, requirementHash: "stale-hash" }] } });
+    const staleStoryboardBundle = buildBundle({ storyboard, inputOverrides: { entryRequirementClassifications: [{ ...valid1, storyboardContentHash: "stale-hash" }] } });
+
+    for (const bundle of [duplicateBundle, unknownBundle, missingBundle, staleRequirementBundle, staleStoryboardBundle]) {
+      const result = await new RenderEngine().run(bundle, context);
+      expect(result.kind).toBe("rejected");
+    }
+  });
+
+  it("admits explicitly renderer-bound conditional classifications and remains executable when only non-blocking findings remain", async () => {
+    const storyboard: Storyboard = {
+      ...twoSceneStoryboard(),
+      gate: { status: "conditional", blockingReasons: [], warnings: [], requirementsBeforeRender: ["Recapture the hero asset."] },
+    };
+    const bundle = buildBundle({
       storyboard,
+      inputOverrides: {
+        entryRequirementClassifications: [
+          entryRequirementClassification({
+            storyboardArtifactId: storyboard.id,
+            storyboardContentHash: canonicalHash(storyboard),
+            requirementIndex: 0,
+            requirement: storyboard.gate.requirementsBeforeRender[0]!,
+            classification: "renderer-bound",
+          }),
+        ],
+      },
       assetBindingRequests: [{
         id: "optional-binding",
         storyboardSceneId: "scene-a",
         renderLayerId: "layer-optional",
         evidenceRefId: "ev-missing",
-        role: "secondary",
+        role: "primary",
         criticality: "optional",
         acceptableMediaTypes: ["image/png"],
         geometry: { xPx: 10, yPx: 10, widthPx: 100, heightPx: 100 },
         zIndex: 1,
       }],
-    }), context);
+    });
+    const result = await new RenderEngine().run(bundle, context);
     expect(result.kind).toBe("compiled");
     if (result.kind !== "compiled") return;
-    // Executability guarantee: conditional gate MUST have zero blocking findings.
-    const hasBlockingFindings = result.gate.blockingFindings.length > 0;
-    expect(hasBlockingFindings).toBe(false);
+    expect(result.gate.blockingFindings).toHaveLength(0);
     expect(result.gate.status).toBe("conditional");
+  });
+
+  it("does not use regex, includes, startsWith, or text inspection to authorize entry", () => {
+    const source = readFileSync(new URL("../src/engines/render.ts", import.meta.url), "utf8");
+    const start = source.indexOf("typed entry-requirement classification authority");
+    const end = source.indexOf("Output profile resolution");
+    const entryBlock = source.slice(start, end);
+    expect(entryBlock).toContain("entryRequirementClassifications");
+    expect(entryBlock).toContain("requirementHash");
+    expect(entryBlock).toContain("ENTRY_REQUIREMENT_CLASSIFICATION_POLICY");
+    expect(entryBlock).not.toContain("classifyEntryRequirement");
+    expect(entryBlock).not.toContain("/\\brecapture\\b/i");
+    expect(entryBlock).not.toContain("includes(");
+    expect(entryBlock).not.toContain("startsWith(");
   });
 });

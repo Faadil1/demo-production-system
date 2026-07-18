@@ -123,12 +123,16 @@ tracking, no adapter-capabilities artifact-hash re-verification path exercised i
 ## Entry-requirement classification policy (§8)
 
 RFC-0006 §8 requires conditional entry classification to use a "versioned closed mapping" rather than
-free-form text alone. The implementation uses `ENTRY_REQUIREMENT_CLASSIFICATION_POLICY` (id: "entry-requirement-classification-policy", version: "0.1")
-with a closed set of renderer-bound keywords: "recapture", "output profile", "prepare asset", "layout requirement", "capability requirement".
+free-form text alone. The implementation now uses typed `entryRequirementClassifications` records on
+`RenderCompilerInput`. Each record binds to the exact Storyboard requirement by storyboard artifact id,
+Storyboard content hash, requirement index, and requirement hash, and it must carry the fixed
+`ENTRY_REQUIREMENT_CLASSIFICATION_POLICY` reference (id: "entry-requirement-classification-policy",
+version: "0.1").
 
-Any requirement not explicitly containing one of these keywords is classified as narrative and rejects
-conditional entry. This is a fail-closed policy that satisfies RFC §8 line 225: "Eligibility MUST be determined
-from typed requirements or a versioned closed mapping. Free-form text alone MUST NOT authorize entry."
+Conditional entry is admitted only when every unresolved requirement has an explicit typed classification
+record marked `renderer-bound`. Missing, duplicate, stale, unknown, or narrative classifications all
+reject closed; no requirement wording, substring matching, regex matching, or semantic inference can
+authorize entry on its own.
 
 Conditional Render Gate executability is verified by confirming the absence of any blocking (critical)
 findings in the gate result — a plan with only non-critical findings remains technically executable.

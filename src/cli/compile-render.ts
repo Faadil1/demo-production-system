@@ -66,6 +66,14 @@ async function main(): Promise<void> {
     adapterCapabilitiesHash: canonicalHash(normalizeAdapterCapabilities(raw.adapterCapabilities)),
   };
 
+  try {
+    await assertSchema("render-compiler-input.schema.json", bundle.input);
+  } catch (error) {
+    console.error(`Invalid render compiler input: ${error instanceof Error ? error.message : String(error)}`);
+    process.exitCode = 1;
+    return;
+  }
+
   const runId = `run-${Date.now()}-${randomUUID().slice(0, 8)}`;
   const runDir = path.join(process.cwd(), ".dps", "runs", runId);
   await mkdir(runDir, { recursive: true });

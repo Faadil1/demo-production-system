@@ -12,6 +12,7 @@
     "assetResolutionPolicy",
     "transitionPolicy",
     "layoutPolicy",
+    "entryRequirementClassifications",
     "adapterCapabilitiesArtifactId",
     "auxiliaryTrackArtifactIds",
     "overrideArtifactIds"
@@ -39,6 +40,30 @@
     "assetResolutionPolicy": { "$ref": "#/$defs/versionedPolicyReference" },
     "transitionPolicy": { "$ref": "#/$defs/versionedPolicyReference" },
     "layoutPolicy": { "$ref": "#/$defs/versionedPolicyReference" },
+    "entryRequirementClassifications": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "storyboardArtifactId",
+          "storyboardContentHash",
+          "requirementIndex",
+          "requirementHash",
+          "classification",
+          "policy"
+        ],
+        "properties": {
+          "storyboardArtifactId": { "type": "string", "minLength": 1 },
+          "storyboardContentHash": { "type": "string", "minLength": 1 },
+          "requirementIndex": { "type": "integer", "minimum": 0 },
+          "requirementHash": { "type": "string", "minLength": 1 },
+          "classification": { "enum": ["renderer-bound", "narrative"] },
+          "policy": { "$ref": "#/$defs/entryRequirementClassificationPolicy" }
+        }
+      }
+    },
     "adapterCapabilitiesArtifactId": { "type": "string", "minLength": 1 },
     "auxiliaryTrackArtifactIds": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
     "overrideArtifactIds": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
@@ -49,6 +74,15 @@
       "additionalProperties": false,
       "required": ["id", "version"],
       "properties": { "id": { "type": "string", "minLength": 1 }, "version": { "type": "string", "minLength": 1 } }
+    },
+    "entryRequirementClassificationPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version"],
+      "properties": {
+        "id": { "const": "entry-requirement-classification-policy" },
+        "version": { "const": "0.1" }
+      }
     }
   }
 }
