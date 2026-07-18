@@ -53,12 +53,20 @@ export type RenderCompilationResult =
 // §8 closed entry-requirement classification policy v0.1
 // ---------------------------------------------------------------------------
 
+const ENTRY_REQUIREMENT_CLASSIFICATION_POLICY = {
+  id: "entry-requirement-classification-policy",
+  version: "0.1",
+} as const;
+
+// Closed set of renderer-bound requirement patterns (case-insensitive word boundary match).
+// Per §8 line 225, eligibility MUST be determined from a versioned closed mapping.
+// Requirements matching these patterns are renderer-bound; all others are narrative.
 const RENDERER_BOUND_REQUIREMENT_PATTERNS: readonly RegExp[] = [
-  /recapture/i,
-  /output profile/i,
-  /prepare asset/i,
-  /layout requirement/i,
-  /capability requirement/i,
+  /\brecapture\b/i,
+  /\boutput\s+profile\b/i,
+  /\bprepare\s+(asset|auxiliary)\b/i,
+  /\blayout\s+(requirement|constraint)\b/i,
+  /\bcapability\s+(requirement|constraint)\b/i,
 ];
 
 function classifyEntryRequirement(text: string): "renderer-bound" | "narrative" {

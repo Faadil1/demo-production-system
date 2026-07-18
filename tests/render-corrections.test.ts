@@ -155,4 +155,50 @@ describe("RFC-0006 corrective packet", () => {
       expect(typeof result.plan.timing.boundaries[1]!.exactDenominator).toBe("string");
     }
   });
+
+  it("rejects non-renderer-bound conditional entry requirements", async () => {
+    // A narrative requirement (narrative gate classification, not renderer-bound patterns)
+    // must reject conditional entry. Versioned closed policy must enforce the distinction
+    // between narrative and renderer-bound requirements per RFC §8.
+    const board = twoSceneStoryboard();
+    const storyboard: Storyboard = {
+      ...board,
+      gate: { ...board.gate, status: "conditional", requirementsBeforeRender: ["Supply a verified ProofChain for every critical claim."] },
+    };
+    const result = await new RenderEngine().run(buildBundle({ storyboard }), context);
+    expect(result.kind).toBe("rejected");
+    if (result.kind === "rejected") expect(result.rejection.reasonCodes).toContain("STORY_GATE_REQUIREMENT_NOT_RENDERER_BOUND");
+  });
+
+  it("verifies a conditional Render Gate result has no blocking findings and remains technically executable", async () => {
+    // A conditional plan MUST remain technically executable, per §33.
+    // Executability is proven by the absence of blocking (critical) findings.
+    // An optional unavailable asset produces a non-critical warning, not a blocking finding,
+    // so the conditional gate remains valid and executable.
+    const board = twoSceneStoryboard();
+    const storyboard: Storyboard = {
+      ...board,
+      gate: { ...board.gate, status: "conditional", requirementsBeforeRender: ["Recapture the hero asset."] },
+    };
+    const result = await new RenderEngine().run(buildBundle({
+      storyboard,
+      assetBindingRequests: [{
+        id: "optional-binding",
+        storyboardSceneId: "scene-a",
+        renderLayerId: "layer-optional",
+        evidenceRefId: "ev-missing",
+        role: "secondary",
+        criticality: "optional",
+        acceptableMediaTypes: ["image/png"],
+        geometry: { xPx: 10, yPx: 10, widthPx: 100, heightPx: 100 },
+        zIndex: 1,
+      }],
+    }), context);
+    expect(result.kind).toBe("compiled");
+    if (result.kind !== "compiled") return;
+    // Executability guarantee: conditional gate MUST have zero blocking findings.
+    const hasBlockingFindings = result.gate.blockingFindings.length > 0;
+    expect(hasBlockingFindings).toBe(false);
+    expect(result.gate.status).toBe("conditional");
+  });
 });

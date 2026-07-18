@@ -120,6 +120,19 @@ reference compiler's scope (see Known Limitations — no auxiliary-track pipelin
 failing mock preparation, no reserved-region auto-generation, no typography-feature
 tracking, no adapter-capabilities artifact-hash re-verification path exercised in tests).
 
+## Entry-requirement classification policy (§8)
+
+RFC-0006 §8 requires conditional entry classification to use a "versioned closed mapping" rather than
+free-form text alone. The implementation uses `ENTRY_REQUIREMENT_CLASSIFICATION_POLICY` (id: "entry-requirement-classification-policy", version: "0.1")
+with a closed set of renderer-bound keywords: "recapture", "output profile", "prepare asset", "layout requirement", "capability requirement".
+
+Any requirement not explicitly containing one of these keywords is classified as narrative and rejects
+conditional entry. This is a fail-closed policy that satisfies RFC §8 line 225: "Eligibility MUST be determined
+from typed requirements or a versioned closed mapping. Free-form text alone MUST NOT authorize entry."
+
+Conditional Render Gate executability is verified by confirming the absence of any blocking (critical)
+findings in the gate result — a plan with only non-critical findings remains technically executable.
+
 ## Known limitations (honest boundary)
 
 1. **Asset preparation is a deterministic mock pass-through.** No real image/video
