@@ -1,4 +1,4 @@
-# RFC-0007 — Artifact Resolution and Pipeline Orchestration v0.1
+# RFC-0007 — Artifact Resolution and Pipeline Orchestration v0.2
 
 Status: **Specification for implementation**
 Depends on: RFC-0001 through RFC-0006
@@ -473,7 +473,7 @@ When stage N+1 executes after stage N:
 
 ### §10.1 In-Process Execution
 
-RFC-0007 v0.1 specifies in-process orchestration:
+RFC-0007 v0.2 specifies in-process orchestration:
 
 ```
 Orchestration CLI
