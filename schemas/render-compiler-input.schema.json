@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/dps/render-compiler-input.schema.json",
+  "title": "RFC-0006 RenderCompilerInput",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "storyboardArtifactId",
+    "expectedStoryboardContentHash",
+    "outputProfile",
+    "assetResolutionPolicy",
+    "transitionPolicy",
+    "layoutPolicy",
+    "adapterCapabilitiesArtifactId",
+    "auxiliaryTrackArtifactIds",
+    "overrideArtifactIds"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "0.1" },
+    "storyboardArtifactId": { "type": "string", "minLength": 1 },
+    "expectedStoryboardContentHash": { "type": "string", "minLength": 1 },
+    "outputProfile": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "profileArtifactId", "expectedContentHash"],
+          "properties": { "kind": { "const": "registered" }, "profileArtifactId": { "type": "string", "minLength": 1 }, "expectedContentHash": { "type": "string", "minLength": 1 } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "profile"],
+          "properties": { "kind": { "const": "inline-custom" }, "profile": { "$ref": "render-output-profile.schema.json" } }
+        }
+      ]
+    },
+    "assetResolutionPolicy": { "$ref": "#/$defs/versionedPolicyReference" },
+    "transitionPolicy": { "$ref": "#/$defs/versionedPolicyReference" },
+    "layoutPolicy": { "$ref": "#/$defs/versionedPolicyReference" },
+    "adapterCapabilitiesArtifactId": { "type": "string", "minLength": 1 },
+    "auxiliaryTrackArtifactIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "overrideArtifactIds": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+  },
+  "$defs": {
+    "versionedPolicyReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version"],
+      "properties": { "id": { "type": "string", "minLength": 1 }, "version": { "type": "string", "minLength": 1 } }
+    }
+  }
+}

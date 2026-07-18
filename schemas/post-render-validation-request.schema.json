@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/dps/post-render-validation-request.schema.json",
+  "title": "RFC-0006 PostRenderValidationRequest (defined, not executed)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "renderPlanArtifactId", "renderedOutputArtifactId", "expectedTotalFrames", "expectedOutputProfile"],
+  "properties": {
+    "schemaVersion": { "const": "0.1" },
+    "renderPlanArtifactId": { "type": "string", "minLength": 1 },
+    "renderedOutputArtifactId": { "type": "string", "minLength": 1 },
+    "expectedTotalFrames": { "type": "integer", "minimum": 0 },
+    "expectedOutputProfile": { "$ref": "render-output-profile.schema.json" }
+  }
+}

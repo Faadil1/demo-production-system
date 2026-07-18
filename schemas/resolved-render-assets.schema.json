@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/dps/resolved-render-assets.schema.json",
+  "title": "RFC-0006 ResolvedRenderAsset[]",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["schemaVersion", "id", "bindingId", "evidenceRefId", "source", "sourceContentHash", "mediaType", "byteLength", "preparationRequirementIds"],
+    "properties": {
+      "schemaVersion": { "const": "0.1" },
+      "id": { "type": "string", "minLength": 1 },
+      "bindingId": { "type": "string", "minLength": 1 },
+      "evidenceRefId": { "type": "string", "minLength": 1 },
+      "source": { "type": "object", "required": ["kind"] },
+      "sourceContentHash": { "type": "string", "minLength": 1 },
+      "mediaType": { "type": "string", "minLength": 1 },
+      "byteLength": { "type": "integer", "minimum": 0 },
+      "intrinsicWidthPx": { "type": "number" },
+      "intrinsicHeightPx": { "type": "number" },
+      "intrinsicDurationMs": { "type": "number" },
+      "preparedArtifactId": { "type": "string" },
+      "preparedContentHash": { "type": "string" },
+      "preparationRequirementIds": { "type": "array", "items": { "type": "string" } }
+    }
+  }
+}

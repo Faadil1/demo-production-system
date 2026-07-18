@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/dps/render-output-profile.schema.json",
+  "title": "RFC-0006 RenderOutputProfile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "version", "widthPx", "heightPx", "pixelAspectRatio", "frameRate", "colorSpace", "safeAreaInsetsPx", "audioMode"],
+  "properties": {
+    "schemaVersion": { "const": "0.1" },
+    "id": { "type": "string", "minLength": 1 },
+    "version": { "type": "string", "minLength": 1 },
+    "widthPx": { "type": "number", "exclusiveMinimum": 0 },
+    "heightPx": { "type": "number", "exclusiveMinimum": 0 },
+    "pixelAspectRatio": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["numerator", "denominator"],
+      "properties": { "numerator": { "type": "number", "exclusiveMinimum": 0 }, "denominator": { "type": "number", "exclusiveMinimum": 0 } }
+    },
+    "frameRate": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "framesPerSecond"],
+          "properties": { "kind": { "const": "integer" }, "framesPerSecond": { "type": "number", "exclusiveMinimum": 0 } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "numerator", "denominator"],
+          "properties": { "kind": { "const": "rational" }, "numerator": { "type": "number", "exclusiveMinimum": 0 }, "denominator": { "type": "number", "exclusiveMinimum": 0 } }
+        }
+      ]
+    },
+    "colorSpace": { "enum": ["srgb", "display-p3", "rec709"] },
+    "safeAreaInsetsPx": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["top", "right", "bottom", "left"],
+      "properties": { "top": { "type": "number", "minimum": 0 }, "right": { "type": "number", "minimum": 0 }, "bottom": { "type": "number", "minimum": 0 }, "left": { "type": "number", "minimum": 0 } }
+    },
+    "audioMode": { "enum": ["none", "optional", "required"] }
+  }
+}

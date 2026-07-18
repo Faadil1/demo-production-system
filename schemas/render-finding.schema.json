@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/dps/render-finding.schema.json",
+  "title": "RFC-0006 general RenderFinding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "stage", "reasonCode", "outcome", "criticality", "affectedIds", "evidence", "source"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "stage": {
+      "enum": [
+        "entry",
+        "profile-resolution",
+        "auxiliary-track-resolution",
+        "asset-binding",
+        "asset-resolution",
+        "asset-integrity",
+        "asset-preparation",
+        "plan-compilation",
+        "timing",
+        "transition",
+        "layout",
+        "capability-negotiation",
+        "override-evaluation",
+        "gate-aggregation"
+      ]
+    },
+    "reasonCode": { "type": "string", "minLength": 1 },
+    "outcome": { "enum": ["satisfied", "unsatisfied"] },
+    "criticality": { "enum": ["critical", "non-critical"] },
+    "affectedIds": { "type": "array", "items": { "type": "string" } },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "detail"],
+        "properties": { "kind": { "type": "string" }, "detail": { "type": "string" } }
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": { "kind": { "type": "string" } }
+    }
+  }
+}

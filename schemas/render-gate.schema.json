@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/dps/render-gate.schema.json",
+  "title": "RFC-0006 RenderGateResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "name", "status", "renderPlanArtifactId", "blockingFindings", "warnings", "requirementsBeforeRender", "appliedOverrideIds", "provenance"],
+  "properties": {
+    "schemaVersion": { "const": "0.1" },
+    "name": { "const": "render" },
+    "status": { "enum": ["pass", "conditional", "fail"] },
+    "renderPlanArtifactId": { "type": ["string", "null"] },
+    "blockingFindings": { "type": "array", "items": { "$ref": "render-finding.schema.json" } },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "findingId", "reasonCode", "affectedIds", "evidence"],
+        "properties": {
+          "id": { "type": "string" },
+          "findingId": { "type": "string" },
+          "reasonCode": { "type": "string" },
+          "affectedIds": { "type": "array", "items": { "type": "string" } },
+          "evidence": { "type": "array" },
+          "appliedOverrideId": { "type": "string" }
+        }
+      }
+    },
+    "requirementsBeforeRender": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "reasonCode", "allowedNextAction", "affectedIds"],
+        "properties": {
+          "id": { "type": "string" },
+          "reasonCode": { "type": "string" },
+          "allowedNextAction": { "type": "string" },
+          "affectedIds": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "appliedOverrideIds": { "type": "array", "items": { "type": "string" } },
+    "provenance": { "type": "object" }
+  }
+}
