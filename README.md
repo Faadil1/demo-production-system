@@ -10,8 +10,10 @@ Demo Production System (working name: **DPS**) is an evidence-first, configurati
 **RFC-0002 — Product Understanding Contract: implemented**
 **RFC-0003 — Existing Demo Analysis: implemented**
 **RFC-0004 — Browser Evidence Capture: reference implementation complete, extension adapters pending**
+**RFC-0005 — Story Engine & Storyboard Compiler: implemented and independently validated**
+**RFC-0006 — Renderer-Neutral Render Planning & Technical Render Gate: implemented and independently validated**
 
-The repository now runs an end-to-end, deterministic, provider-independent pipeline:
+The repository now runs an end-to-end, deterministic, provider-independent pipeline across understanding, evidence capture, and render planning:
 
 ```text
 demo.yaml
@@ -23,6 +25,17 @@ demo.yaml
   -> Decision Log
   -> lifecycle Event Log
   -> run-summary.json
+
+Storyboard (via npm run compile-story)
+  -> reference Story Engine (RFC-0005, see docs/007)
+  -> storyboard.json with narrative structure, proof chains, renderer readiness
+  -> Story Gate (pass/conditional/fail)
+
+RenderPlan (via npm run compile-render)
+  -> reference Render Planning Engine (RFC-0006, see docs/008)
+  -> render-plan.json with frame boundaries, asset bindings, objective layout
+  -> Render Gate (technical, pre-render)
+  -> [pending: renderer adapter to produce MP4]
 ```
 
 The Understanding Engine now produces a structured `ProductUnderstanding` artifact that
@@ -94,18 +107,18 @@ No Remotion rendering, LLM, OCR, speech-to-text, or cloud API is part of the cor
 ```text
 src/
   core/       # domain types, engine contract, artifact/decision/event contracts, DIR type,
-              # media/transcript/observation/existing-demo-analysis contracts,
+              # story/render/media/transcript/observation contracts,
               # browser target/plan/policy/assertion/network/artifact/evidence contracts
-  engines/    # deterministic reference Understanding + Planning engines, DIR compiler,
-              # ExistingDemoAnalysisEngine, BrowserCaptureEngine
-  adapters/   # replaceable MediaInspector (ffprobe) and BrowserAdapter (Playwright) interfaces + reference implementations
+  engines/    # deterministic reference Understanding + Planning + Story + Render engines,
+              # DIR/ExistingDemoAnalysis/BrowserCapture engines
+  adapters/   # replaceable MediaInspector (ffprobe) and BrowserAdapter (Playwright) interfaces
   bridges/    # one-way browser-capture -> ProductUnderstanding evidence bridge
   registry/   # filesystem ArtifactRegistry implementation
-  cli/        # demo, analyze-demo, and capture-browser pipeline entrypoints
-schemas/
-docs/
-tests/
-examples/
+  cli/        # demo, analyze-demo, capture-browser, compile-story, compile-render entrypoints
+schemas/      # JSON Schema definitions for all artifact types
+docs/         # RFC specifications and implementation documentation
+tests/        # comprehensive test suite (301+ tests)
+examples/     # minimal examples for each pipeline stage
 ```
 
 ## Quick start
@@ -118,12 +131,17 @@ npm test
 
 ## Next milestone
 
-With RFC-0001 through RFC-0004 complete, the next milestone (v0.2) introduces the Story
-Engine and a renderer adapter behind the same core contracts, plus wiring the RFC-0004
-browser-capture bridge into an actual Understanding Gate re-evaluation and into
-RFC-0003's Existing Demo Analysis observation input — both of which can now be fed real
-verified evidence instead of only externally-supplied data. Rendering remains
-deliberately excluded from the core itself.
+With RFC-0001 through RFC-0006 complete, the individual pipeline stages produce valid
+artifacts independently. The next milestone (RFC-0007) addresses the practical gap:
+individual CLI commands (`demo`, `compile-story`, `compile-render`) currently require
+callers to manually assemble inline payload bundles. RFC-0007 introduces artifact resolution
+against the filesystem registry and deterministic pipeline orchestration, enabling
+fully reproducible end-to-end runs without manual artifact copying.
+
+After RFC-0007, the following milestone (RFC-0008 or renderer-adapter work) will
+introduce a Remotion renderer adapter and MP4 export, completing the output pipeline.
+Rendering remains deliberately excluded from the core (RFC-0006) and will be an
+adapter responsibility.
 
 ## Naming
 
