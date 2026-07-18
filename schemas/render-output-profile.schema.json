@@ -9,13 +9,13 @@
     "schemaVersion": { "const": "0.1" },
     "id": { "type": "string", "minLength": 1 },
     "version": { "type": "string", "minLength": 1 },
-    "widthPx": { "type": "number", "exclusiveMinimum": 0 },
-    "heightPx": { "type": "number", "exclusiveMinimum": 0 },
+    "widthPx": { "type": "integer", "exclusiveMinimum": 0 },
+    "heightPx": { "type": "integer", "exclusiveMinimum": 0 },
     "pixelAspectRatio": {
       "type": "object",
       "additionalProperties": false,
       "required": ["numerator", "denominator"],
-      "properties": { "numerator": { "type": "number", "exclusiveMinimum": 0 }, "denominator": { "type": "number", "exclusiveMinimum": 0 } }
+      "properties": { "numerator": { "type": "integer", "exclusiveMinimum": 0 }, "denominator": { "type": "integer", "exclusiveMinimum": 0 } }
     },
     "frameRate": {
       "oneOf": [
@@ -23,13 +23,13 @@
           "type": "object",
           "additionalProperties": false,
           "required": ["kind", "framesPerSecond"],
-          "properties": { "kind": { "const": "integer" }, "framesPerSecond": { "type": "number", "exclusiveMinimum": 0 } }
+          "properties": { "kind": { "const": "integer" }, "framesPerSecond": { "type": "integer", "exclusiveMinimum": 0 } }
         },
         {
           "type": "object",
           "additionalProperties": false,
           "required": ["kind", "numerator", "denominator"],
-          "properties": { "kind": { "const": "rational" }, "numerator": { "type": "number", "exclusiveMinimum": 0 }, "denominator": { "type": "number", "exclusiveMinimum": 0 } }
+          "properties": { "kind": { "const": "rational" }, "numerator": { "type": "integer", "exclusiveMinimum": 0 }, "denominator": { "type": "integer", "exclusiveMinimum": 0 } }
         }
       ]
     },
@@ -38,7 +38,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["top", "right", "bottom", "left"],
-      "properties": { "top": { "type": "number", "minimum": 0 }, "right": { "type": "number", "minimum": 0 }, "bottom": { "type": "number", "minimum": 0 }, "left": { "type": "number", "minimum": 0 } }
+      "properties": { "top": { "type": "integer", "minimum": 0 }, "right": { "type": "integer", "minimum": 0 }, "bottom": { "type": "integer", "minimum": 0 }, "left": { "type": "integer", "minimum": 0 } }
     },
     "audioMode": { "enum": ["none", "optional", "required"] }
   }

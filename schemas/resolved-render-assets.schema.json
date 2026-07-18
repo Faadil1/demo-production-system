@@ -14,14 +14,14 @@
       "evidenceRefId": { "type": "string", "minLength": 1 },
       "source": { "type": "object", "required": ["kind"] },
       "sourceContentHash": { "type": "string", "minLength": 1 },
-      "mediaType": { "type": "string", "minLength": 1 },
-      "byteLength": { "type": "integer", "minimum": 0 },
-      "intrinsicWidthPx": { "type": "number" },
-      "intrinsicHeightPx": { "type": "number" },
-      "intrinsicDurationMs": { "type": "number" },
+      "mediaType": { "enum": ["image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm", "audio/wav", "audio/mp3", "font/ttf", "font/woff2"] },
+      "byteLength": { "type": "integer", "exclusiveMinimum": 0 },
+      "intrinsicWidthPx": { "type": "integer", "exclusiveMinimum": 0 },
+      "intrinsicHeightPx": { "type": "integer", "exclusiveMinimum": 0 },
+      "intrinsicDurationMs": { "type": "integer", "exclusiveMinimum": 0 },
       "preparedArtifactId": { "type": "string" },
       "preparedContentHash": { "type": "string" },
-      "preparationRequirementIds": { "type": "array", "items": { "type": "string" } }
+      "preparationRequirementIds": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
     }
   }
 }

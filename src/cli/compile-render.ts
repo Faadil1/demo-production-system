@@ -2,12 +2,13 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { load as loadYaml } from "js-yaml";
+import { Ajv2020 } from "ajv/dist/2020.js";
 import { DecisionLog } from "../core/decision-log.js";
 import { EventLog } from "../core/event-log.js";
 import { FilesystemArtifactRegistry } from "../registry/filesystem-artifact-registry.js";
 import { RenderEngine, type RenderCompilationResult } from "../engines/render.js";
 import type { RenderCompilerBundle } from "../core/render-input.js";
-import { canonicalHash } from "../core/render-canonical.js";
+import { canonicalHash, normalizeAdapterCapabilities } from "../core/render-canonical.js";
 import { buildArtifactEnvelope as envelope } from "./artifact-envelope.js";
 import { determineExitCode } from "./exit-code-policy.js";
 
@@ -26,6 +27,19 @@ import { determineExitCode } from "./exit-code-policy.js";
  * This CLI never triggers adapter compilation, rendering, export, or post-render
  * validation — it only compiles a Render Plan and evaluates the technical Render Gate.
  */
+async function assertSchema(schemaName: string, payload: unknown): Promise<void> {
+  const ajv = new Ajv2020({ allErrors: true, strict: false });
+  for (const name of ["render-output-profile.schema.json", "render-finding.schema.json"]) {
+    const schema = JSON.parse(await readFile(new URL("../../schemas/" + name, import.meta.url), "utf8"));
+    ajv.addSchema(schema, name);
+  }
+  const schema = JSON.parse(await readFile(new URL("../../schemas/" + schemaName, import.meta.url), "utf8"));
+  const validate = ajv.compile(schema);
+  if (!validate(payload)) {
+    throw new Error("Schema validation failed for " + schemaName + ": " + ajv.errorsText(validate.errors));
+  }
+}
+
 async function main(): Promise<void> {
   const inputPath = process.argv[2];
   if (!inputPath) {
@@ -49,7 +63,7 @@ async function main(): Promise<void> {
   const bundle: RenderCompilerBundle = {
     ...raw,
     storyboardContentHash: canonicalHash(raw.storyboard),
-    adapterCapabilitiesHash: canonicalHash(raw.adapterCapabilities),
+    adapterCapabilitiesHash: canonicalHash(normalizeAdapterCapabilities(raw.adapterCapabilities)),
   };
 
   const runId = `run-${Date.now()}-${randomUUID().slice(0, 8)}`;
@@ -73,16 +87,12 @@ async function main(): Promise<void> {
 
   try {
     const engine = new RenderEngine();
-    const validation = engine.validate(bundle);
-    if (!validation.ok) {
-      throw new Error(`RenderEngine rejected input: ${validation.issues.map((i) => i.message).join("; ")}`);
-    }
-
     result = await engine.run(bundle, context);
 
     if (result.kind === "rejected") {
       // Case A: no canonical Render Plan can be produced — emit RenderRejection only.
       gateStatus = null;
+      await assertSchema("render-rejection.schema.json", result.rejection);
       const rejectionArtifact = envelope({
         artifactId: "render-rejection",
         runId,
@@ -96,6 +106,7 @@ async function main(): Promise<void> {
     } else {
       // Cases B/C: resolved-assets + plan are always persisted once a canonical plan
       // exists, regardless of gate status (§40).
+      await assertSchema("resolved-render-assets.schema.json", result.resolvedAssets);
       const resolvedAssetsArtifact = envelope({
         artifactId: "resolved-assets",
         runId,
@@ -107,6 +118,7 @@ async function main(): Promise<void> {
       });
       await registry.put(resolvedAssetsArtifact);
 
+      await assertSchema("render-plan.schema.json", result.plan);
       const planArtifact = envelope({
         artifactId: "render-plan",
         runId,
@@ -117,8 +129,9 @@ async function main(): Promise<void> {
         payload: result.plan,
       });
       await registry.put(planArtifact);
-      planArtifactId = planArtifact.artifactId;
+      planArtifactId = result.plan.id;
 
+      await assertSchema("render-gate.schema.json", result.gate);
       const gateArtifact = envelope({
         artifactId: "render-gate",
         runId,

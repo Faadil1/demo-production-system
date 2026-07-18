@@ -40,8 +40,8 @@
     "transitionPolicy": { "$ref": "#/$defs/versionedPolicyReference" },
     "layoutPolicy": { "$ref": "#/$defs/versionedPolicyReference" },
     "adapterCapabilitiesArtifactId": { "type": "string", "minLength": 1 },
-    "auxiliaryTrackArtifactIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-    "overrideArtifactIds": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+    "auxiliaryTrackArtifactIds": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+    "overrideArtifactIds": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
   },
   "$defs": {
     "versionedPolicyReference": {

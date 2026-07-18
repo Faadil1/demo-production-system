@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { buildBundle, defaultAdapterCapabilities, ONE_PX_PNG_BASE64, twoSceneStoryboard } from "./fixtures/render-fixtures.js";
+import { buildBundle, defaultAdapterCapabilities, ONE_PX_PNG_BASE64, ONE_PX_PNG_HASH, ONE_PX_PNG_LENGTH, twoSceneStoryboard } from "./fixtures/render-fixtures.js";
 
 const execFileAsync = promisify(execFile);
 const repoRoot = path.resolve(__dirname, "..");
@@ -75,6 +75,8 @@ describe("npm run compile-render (CLI)", () => {
           source: { kind: "artifact", sourceArtifactId: "artifact-cand-1" },
           declaredMediaType: "image/png",
           bytesBase64: ONE_PX_PNG_BASE64,
+          expectedContentHash: ONE_PX_PNG_HASH,
+          declaredByteLength: ONE_PX_PNG_LENGTH,
         },
       ],
       assetBindingRequests: [

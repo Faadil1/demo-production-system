@@ -1,45 +1,250 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.invalid/dps/render-gate.schema.json",
-  "title": "RFC-0006 RenderGateResult",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["schemaVersion", "name", "status", "renderPlanArtifactId", "blockingFindings", "warnings", "requirementsBeforeRender", "appliedOverrideIds", "provenance"],
-  "properties": {
-    "schemaVersion": { "const": "0.1" },
-    "name": { "const": "render" },
-    "status": { "enum": ["pass", "conditional", "fail"] },
-    "renderPlanArtifactId": { "type": ["string", "null"] },
-    "blockingFindings": { "type": "array", "items": { "$ref": "render-finding.schema.json" } },
-    "warnings": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["id", "findingId", "reasonCode", "affectedIds", "evidence"],
-        "properties": {
-          "id": { "type": "string" },
-          "findingId": { "type": "string" },
-          "reasonCode": { "type": "string" },
-          "affectedIds": { "type": "array", "items": { "type": "string" } },
-          "evidence": { "type": "array" },
-          "appliedOverrideId": { "type": "string" }
-        }
-      }
-    },
-    "requirementsBeforeRender": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["id", "reasonCode", "allowedNextAction", "affectedIds"],
-        "properties": {
-          "id": { "type": "string" },
-          "reasonCode": { "type": "string" },
-          "allowedNextAction": { "type": "string" },
-          "affectedIds": { "type": "array", "items": { "type": "string" } }
-        }
-      }
-    },
-    "appliedOverrideIds": { "type": "array", "items": { "type": "string" } },
-    "provenance": { "type": "object" }
-  }
+    "$schema":  "https://json-schema.org/draft/2020-12/schema",
+    "$id":  "https://example.invalid/dps/render-gate.schema.json",
+    "title":  "RFC-0006 RenderGateResult",
+    "type":  "object",
+    "additionalProperties":  false,
+    "required":  [
+                     "schemaVersion",
+                     "name",
+                     "status",
+                     "renderPlanArtifactId",
+                     "blockingFindings",
+                     "warnings",
+                     "requirementsBeforeRender",
+                     "appliedOverrideIds",
+                     "provenance"
+                 ],
+    "properties":  {
+                       "schemaVersion":  {
+                                             "const":  "0.1"
+                                         },
+                       "name":  {
+                                    "const":  "render"
+                                },
+                       "status":  {
+                                      "enum":  [
+                                                   "pass",
+                                                   "conditional",
+                                                   "fail"
+                                               ]
+                                  },
+                       "renderPlanArtifactId":  {
+                                                    "oneOf":  [
+                                                                  {
+                                                                      "type":  "string",
+                                                                      "minLength":  1
+                                                                  },
+                                                                  {
+                                                                      "type":  "null"
+                                                                  }
+                                                              ]
+                                                },
+                       "blockingFindings":  {
+                                                "type":  "array",
+                                                "items":  {
+                                                              "$ref":  "render-finding.schema.json"
+                                                          }
+                                            },
+                       "warnings":  {
+                                        "type":  "array",
+                                        "items":  {
+                                                      "type":  "object",
+                                                      "required":  [
+                                                                       "id",
+                                                                       "findingId",
+                                                                       "reasonCode",
+                                                                       "affectedIds",
+                                                                       "evidence"
+                                                                   ],
+                                                      "properties":  {
+                                                                         "id":  {
+                                                                                    "type":  "string",
+                                                                                    "minLength":  1
+                                                                                },
+                                                                         "findingId":  {
+                                                                                           "type":  "string",
+                                                                                           "minLength":  1
+                                                                                       },
+                                                                         "reasonCode":  {
+                                                                                            "enum":  [
+                                                                                                         "RENDER_COMPILER_INPUT_INVALID",
+                                                                                                         "STORY_GATE_INELIGIBLE",
+                                                                                                         "STORY_GATE_REQUIREMENT_NOT_RENDERER_BOUND",
+                                                                                                         "STORYBOARD_NOT_FOUND",
+                                                                                                         "STORYBOARD_HASH_MISMATCH",
+                                                                                                         "STORYBOARD_REFERENCE_INVALID",
+                                                                                                         "DEPENDENCY_ARTIFACT_NOT_FOUND",
+                                                                                                         "OUTPUT_PROFILE_NOT_FOUND",
+                                                                                                         "OUTPUT_PROFILE_HASH_MISMATCH",
+                                                                                                         "OUTPUT_PROFILE_INVALID",
+                                                                                                         "OUTPUT_PROFILE_CONTRADICTORY",
+                                                                                                         "OUTPUT_PROFILE_UNSUPPORTED",
+                                                                                                         "REQUIRED_AUXILIARY_TRACK_MISSING",
+                                                                                                         "REQUIRED_AUXILIARY_TRACK_INVALID",
+                                                                                                         "RENDER_PLAN_STRUCTURALLY_INVALID",
+                                                                                                         "REQUIRED_LAYER_UNREALIZABLE",
+                                                                                                         "TIMING_ALLOCATION_IMPOSSIBLE",
+                                                                                                         "FRAME_ROUNDING_INVARIANT_FAILED",
+                                                                                                         "TRANSITION_POLICY_UNRESOLVED",
+                                                                                                         "TRANSITION_OVERLAP_INVALID",
+                                                                                                         "ASSET_BINDING_UNRESOLVED",
+                                                                                                         "ASSET_MISSING",
+                                                                                                         "ASSET_AUTHORITATIVE_CANDIDATE_AMBIGUOUS",
+                                                                                                         "ASSET_HASH_MISMATCH",
+                                                                                                         "ASSET_CORRUPT",
+                                                                                                         "ASSET_FORMAT_UNSUPPORTED",
+                                                                                                         "ASSET_STALE",
+                                                                                                         "ASSET_PREPARATION_FAILED",
+                                                                                                         "CONTENT_OUT_OF_FRAME",
+                                                                                                         "SAFE_AREA_VIOLATION",
+                                                                                                         "MINIMUM_SIZE_VIOLATION",
+                                                                                                         "REQUIRED_ELEMENTS_OVERLAP",
+                                                                                                         "RESERVED_REGION_MISSING",
+                                                                                                         "TEXT_OVERFLOW",
+                                                                                                         "ADAPTER_CAPABILITIES_NOT_FOUND",
+                                                                                                         "ADAPTER_CAPABILITIES_HASH_MISMATCH",
+                                                                                                         "ADAPTER_CAPABILITIES_INVALID",
+                                                                                                         "ADAPTER_LAYER_UNSUPPORTED",
+                                                                                                         "ADAPTER_SCENE_UNSUPPORTED",
+                                                                                                         "ADAPTER_TRANSITION_UNSUPPORTED",
+                                                                                                         "ADAPTER_TYPOGRAPHY_UNSUPPORTED",
+                                                                                                         "ADAPTER_MEDIA_TYPE_UNSUPPORTED",
+                                                                                                         "ADAPTER_DIMENSIONS_UNSUPPORTED",
+                                                                                                         "ADAPTER_TIMEBASE_UNSUPPORTED",
+                                                                                                         "ADAPTER_COLOR_SPACE_UNSUPPORTED",
+                                                                                                         "ADAPTER_AUDIO_MODE_UNSUPPORTED",
+                                                                                                         "OPTIONAL_ASSET_UNAVAILABLE",
+                                                                                                         "OPTIONAL_ASSET_RECAPTURE_RECOMMENDED",
+                                                                                                         "NON_CRITICAL_LAYOUT_DEGRADATION",
+                                                                                                         "OVERRIDE_INVALID",
+                                                                                                         "OVERRIDE_NOT_ALLOWLISTED"
+                                                                                                     ]
+                                                                                        },
+                                                                         "affectedIds":  {
+                                                                                             "type":  "array",
+                                                                                             "items":  {
+                                                                                                           "type":  "string"
+                                                                                                       },
+                                                                                             "uniqueItems":  true
+                                                                                         },
+                                                                         "evidence":  {
+                                                                                          "type":  "array"
+                                                                                      },
+                                                                         "appliedOverrideId":  {
+                                                                                                   "type":  "string"
+                                                                                               }
+                                                                     },
+                                                      "additionalProperties":  false
+                                                  }
+                                    },
+                       "requirementsBeforeRender":  {
+                                                        "type":  "array",
+                                                        "items":  {
+                                                                      "type":  "object",
+                                                                      "required":  [
+                                                                                       "id",
+                                                                                       "reasonCode",
+                                                                                       "allowedNextAction",
+                                                                                       "affectedIds"
+                                                                                   ],
+                                                                      "properties":  {
+                                                                                         "id":  {
+                                                                                                    "type":  "string",
+                                                                                                    "minLength":  1
+                                                                                                },
+                                                                                         "reasonCode":  {
+                                                                                                            "enum":  [
+                                                                                                                         "RENDER_COMPILER_INPUT_INVALID",
+                                                                                                                         "STORY_GATE_INELIGIBLE",
+                                                                                                                         "STORY_GATE_REQUIREMENT_NOT_RENDERER_BOUND",
+                                                                                                                         "STORYBOARD_NOT_FOUND",
+                                                                                                                         "STORYBOARD_HASH_MISMATCH",
+                                                                                                                         "STORYBOARD_REFERENCE_INVALID",
+                                                                                                                         "DEPENDENCY_ARTIFACT_NOT_FOUND",
+                                                                                                                         "OUTPUT_PROFILE_NOT_FOUND",
+                                                                                                                         "OUTPUT_PROFILE_HASH_MISMATCH",
+                                                                                                                         "OUTPUT_PROFILE_INVALID",
+                                                                                                                         "OUTPUT_PROFILE_CONTRADICTORY",
+                                                                                                                         "OUTPUT_PROFILE_UNSUPPORTED",
+                                                                                                                         "REQUIRED_AUXILIARY_TRACK_MISSING",
+                                                                                                                         "REQUIRED_AUXILIARY_TRACK_INVALID",
+                                                                                                                         "RENDER_PLAN_STRUCTURALLY_INVALID",
+                                                                                                                         "REQUIRED_LAYER_UNREALIZABLE",
+                                                                                                                         "TIMING_ALLOCATION_IMPOSSIBLE",
+                                                                                                                         "FRAME_ROUNDING_INVARIANT_FAILED",
+                                                                                                                         "TRANSITION_POLICY_UNRESOLVED",
+                                                                                                                         "TRANSITION_OVERLAP_INVALID",
+                                                                                                                         "ASSET_BINDING_UNRESOLVED",
+                                                                                                                         "ASSET_MISSING",
+                                                                                                                         "ASSET_AUTHORITATIVE_CANDIDATE_AMBIGUOUS",
+                                                                                                                         "ASSET_HASH_MISMATCH",
+                                                                                                                         "ASSET_CORRUPT",
+                                                                                                                         "ASSET_FORMAT_UNSUPPORTED",
+                                                                                                                         "ASSET_STALE",
+                                                                                                                         "ASSET_PREPARATION_FAILED",
+                                                                                                                         "CONTENT_OUT_OF_FRAME",
+                                                                                                                         "SAFE_AREA_VIOLATION",
+                                                                                                                         "MINIMUM_SIZE_VIOLATION",
+                                                                                                                         "REQUIRED_ELEMENTS_OVERLAP",
+                                                                                                                         "RESERVED_REGION_MISSING",
+                                                                                                                         "TEXT_OVERFLOW",
+                                                                                                                         "ADAPTER_CAPABILITIES_NOT_FOUND",
+                                                                                                                         "ADAPTER_CAPABILITIES_HASH_MISMATCH",
+                                                                                                                         "ADAPTER_CAPABILITIES_INVALID",
+                                                                                                                         "ADAPTER_LAYER_UNSUPPORTED",
+                                                                                                                         "ADAPTER_SCENE_UNSUPPORTED",
+                                                                                                                         "ADAPTER_TRANSITION_UNSUPPORTED",
+                                                                                                                         "ADAPTER_TYPOGRAPHY_UNSUPPORTED",
+                                                                                                                         "ADAPTER_MEDIA_TYPE_UNSUPPORTED",
+                                                                                                                         "ADAPTER_DIMENSIONS_UNSUPPORTED",
+                                                                                                                         "ADAPTER_TIMEBASE_UNSUPPORTED",
+                                                                                                                         "ADAPTER_COLOR_SPACE_UNSUPPORTED",
+                                                                                                                         "ADAPTER_AUDIO_MODE_UNSUPPORTED",
+                                                                                                                         "OPTIONAL_ASSET_UNAVAILABLE",
+                                                                                                                         "OPTIONAL_ASSET_RECAPTURE_RECOMMENDED",
+                                                                                                                         "NON_CRITICAL_LAYOUT_DEGRADATION",
+                                                                                                                         "OVERRIDE_INVALID",
+                                                                                                                         "OVERRIDE_NOT_ALLOWLISTED"
+                                                                                                                     ]
+                                                                                                        },
+                                                                                         "allowedNextAction":  {
+                                                                                                                   "enum":  [
+                                                                                                                                "correct-render-input",
+                                                                                                                                "resolve-upstream-story-requirement",
+                                                                                                                                "restore-artifact",
+                                                                                                                                "recapture-authorized-evidence",
+                                                                                                                                "select-authoritative-asset",
+                                                                                                                                "prepare-asset",
+                                                                                                                                "select-output-profile",
+                                                                                                                                "select-compatible-adapter",
+                                                                                                                                "revise-versioned-policy",
+                                                                                                                                "provide-approved-text-variant",
+                                                                                                                                "compile-required-auxiliary-track",
+                                                                                                                                "remove-invalid-override",
+                                                                                                                                "retry-render-planning"
+                                                                                                                            ]
+                                                                                                               },
+                                                                                         "affectedIds":  {
+                                                                                                             "type":  "array",
+                                                                                                             "items":  {
+                                                                                                                           "type":  "string"
+                                                                                                                       },
+                                                                                                             "uniqueItems":  true
+                                                                                                         }
+                                                                                     },
+                                                                      "additionalProperties":  false
+                                                                  }
+                                                    },
+                       "appliedOverrideIds":  {
+                                                  "type":  "array",
+                                                  "items":  {
+                                                                "type":  "string"
+                                                            },
+                                                  "uniqueItems":  true
+                                              },
+                       "provenance":  {
+                                          "type":  "object"
+                                      }
+                   }
 }
