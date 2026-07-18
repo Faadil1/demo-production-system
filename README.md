@@ -6,12 +6,12 @@ Demo Production System (working name: **DPS**) is an evidence-first, configurati
 
 ## Current status
 
-**RFC-0001 â€” Foundation Vertical Slice: implemented**
-**RFC-0002 â€” Product Understanding Contract: implemented**
-**RFC-0003 â€” Existing Demo Analysis: implemented**
-**RFC-0004 â€” Browser Evidence Capture: reference implementation complete, extension adapters pending**
-**RFC-0005 â€” Story Engine & Storyboard Compiler: implemented and independently validated**
-**RFC-0006 â€” Renderer-Neutral Render Planning & Technical Render Gate: implemented and independently validated**
+**RFC-0001 — Foundation Vertical Slice: implemented**
+**RFC-0002 — Product Understanding Contract: implemented**
+**RFC-0003 — Existing Demo Analysis: implemented**
+**RFC-0004 — Browser Evidence Capture: reference implementation complete, extension adapters pending**
+**RFC-0005 — Story Engine & Storyboard Compiler: implemented and independently validated**
+**RFC-0006 — Renderer-Neutral Render Planning & Technical Render Gate: implemented and independently validated**
 
 The repository now runs an end-to-end, deterministic, provider-independent pipeline across understanding, evidence capture, and render planning:
 
@@ -56,7 +56,7 @@ Artifacts are written to `.dps/runs/<run-id>/`: `manifest.json`, `understanding.
 `plan.json`, `dir.json`, `decisions.json`, `events.json`, `run-summary.json`.
 
 A second, independent pipeline analyzes an *existing* demo video deterministically and
-locally â€” no computer vision, speech recognition, or LLM involved:
+locally — no computer vision, speech recognition, or LLM involved:
 
 ```bash
 npm run analyze-demo -- examples/existing-demo/analysis.yaml
@@ -80,14 +80,14 @@ npm run capture-browser -- examples/browser-capture/capture.yaml
 It runs an explicit, safety-policy-bounded sequence of navigate/click/assert/screenshot
 steps, generates a browser-driven `DemoObservationTimeline`, and produces a
 `browser-capture-result.json` with an evidence manifest and a
-`pass`/`conditional`/`fail` Capture Gate â€” a screenshot alone is never treated as proof;
+`pass`/`conditional`/`fail` Capture Gate — a screenshot alone is never treated as proof;
 only a passed assertion linked to a screenshot becomes `proof-visible`. A one-way
 bridge converts verified capture evidence into RFC-0002-shaped evidence
 (`understanding-evidence.json`) without ever rewriting an existing `ProductUnderstanding`
 artifact. See
 [`docs/006-browser-evidence-capture.md`](docs/006-browser-evidence-capture.md) for the
 full contract, safety model, and CLI usage (the example requires starting a local
-fixture server first â€” see `examples/browser-capture/README.md`).
+fixture server first — see `examples/browser-capture/README.md`).
 
 No Remotion rendering, LLM, OCR, speech-to-text, or cloud API is part of the core.
 

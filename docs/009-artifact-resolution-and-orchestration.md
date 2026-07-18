@@ -106,7 +106,7 @@ RFC-0007 MUST NOT:
 - Implement post-render validation
 - Modify the contracts of RFC-0001–0006 (only add orchestration and resolution on top)
 - Implement asynchronous execution, parallel stages, or caching beyond the filesystem registry
-- Add network-based or cloud artifact resolution (filesystem-only in v0.1)
+- Add network-based or cloud artifact resolution (filesystem-only in v0.2)
 - Implement implicit semantic inference (e.g., auto-derive bindings from Storyboard presentation intent)
 - Mutate existing immutable artifacts
 - Change story mode, arc, claims, proof chains, evidence, or narrative structure mid-pipeline
@@ -352,7 +352,7 @@ If detectDuplicate(reference1, reference2) where both are in same stage input:
 **Required artifacts (normative):**
 
 ```
-IF a required artifact resolution fails (ARTIFACT_NOT_FOUND, ARTIFACT_HASH_MISMATCH, 
+IF a required artifact resolution fails (ARTIFACT_NOT_FOUND, ARTIFACT_HASH_MISMATCH,
 ARTIFACT_KIND_MISMATCH, ARTIFACT_SCHEMA_UNSUPPORTED, ARTIFACT_CORRUPTED):
   THEN stage execution fails
   AND orchestration gate status becomes fail
@@ -369,7 +369,7 @@ IF an optional artifact resolution fails:
   AND downstream stages may proceed if their required inputs are available
 ```
 
-**Current v0.1 artifact requirements** (derived from RFC contracts):
+**Current v0.2 artifact requirements** (derived from RFC contracts):
 
 | Reference | Requirement | Stage |
 |---|---|---|
@@ -815,7 +815,7 @@ This RFC explicitly excludes:
 
 ## Appendix B: Known Limitations (Honest Boundary)
 
-1. **Filesystem-Only Registry** — No network, cloud, or database backend in v0.1. Supports `.dps/runs/` and sibling-run lookup only.
+1. **Filesystem-Only Registry** — No network, cloud, or database backend in v0.2. Supports `.dps/runs/` and sibling-run lookup only.
 2. **Single-Machine Execution** — No distributed execution, caching, or remote workers. In-process orchestration only.
 3. **No Interactive Recovery** — Fail-closed on any error; no prompt-based recovery or manual override flow. User must fix input and re-run.
 4. **Cross-Run References Optional** — Default behavior is single-run isolation; cross-run requires explicit flag and stable registry state.
