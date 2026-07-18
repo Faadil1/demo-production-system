@@ -18,7 +18,7 @@
 
 - [x] Understanding Engine (RFC-0002 Product Understanding Contract)
 - [x] Planning Engine (consumes Product Understanding Gate + selection)
-- [x] Story Engine (RFC-0005 — reference implementation complete: contracts, deterministic compiler, `compile-story` CLI; documented scope simplifications in `docs/implementation/rfc-0005-implementation.md`)
+- [x] Story Engine implemented with explicitly documented limitations (RFC-0005 — contracts, deterministic compiler, `compile-story` CLI; independently audited — see `docs/implementation/rfc-0005-conformance-audit.md` and `docs/implementation/rfc-0005-implementation.md`. Candidate generation reaches 9 of 19 `NarrativeBeatKind`s, which in turn makes 4 of 8 `NarrativeArc`s unreachable without an explicit `arc-override`; proof-chain evidence is bounded by DIR evidence `kind` rather than true per-claim linkage, pending an upstream RFC-0004/DIR owner decision on adding a claim↔assertion identifier)
 - [x] Playwright browser adapter (RFC-0004 Browser Evidence Capture — reference implementation complete; extension adapters pending)
 - [ ] Remotion renderer adapter
 - [ ] MP4 export

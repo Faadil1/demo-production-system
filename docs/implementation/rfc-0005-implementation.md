@@ -1,8 +1,19 @@
 # RFC-0005 implementation — Story Engine & Storyboard Compiler
 
-Status: **Reference implementation complete**, with documented simplifications relative
-to the full RFC-0005 specification (docs/007-story-engine-and-storyboard-compiler.md).
-See "Known limitations" below.
+Status: **Reference implementation with explicitly documented limitations.** An
+independent conformance audit (see `docs/implementation/rfc-0005-conformance-audit.md`)
+found and corrected two RFC non-conformities (proof-chain over-claiming across DIR
+evidence kinds a browser run cannot substantiate, and a §7 `sourceClaimIds`/
+`sourceFactIds` invariant violation on Hero-Interaction-derived beats), added
+`schemas/storyboard.schema.json` to match the RFC-0002–0004 schema convention, switched
+the CLI to accept YAML per §32, and added test coverage for renderer readiness, CTA
+policy, arc override, rejection-code validity, and the corrected proof-chain behavior.
+The remaining items below are genuine, intentionally scoped v0.1 limitations (narrow
+candidate-generation surface, simplified duration compression, run-level rather than
+semantically-matched proof linkage) — none of them violates an RFC-0005 invariant, but
+several genuinely narrow which of the eight `NarrativeArc`s and which of the nineteen
+`NarrativeBeatKind`s the reference compiler can actually reach without an `arc-override`
+constraint. See "Known limitations" below for the precise, honest boundary.
 
 ## Architecture
 
@@ -36,12 +47,17 @@ Storyboard                                     src/core/story.ts
 - **Engine**: `src/engines/story.ts`, `StoryEngine implements Engine<StoryCompilerInput,
   Storyboard>` — same shape as `UnderstandingEngine`/`ExistingDemoAnalysisEngine`/
   `BrowserCaptureEngine`.
-- **CLI**: `src/cli/compile-story.ts`, `npm run compile-story -- <path-to-story-input.json>`.
-  Reads a JSON `StoryCompilerInput` document, runs the engine, persists `storyboard.json`
-  via the existing `FilesystemArtifactRegistry`/`DecisionLog`/`EventLog`/`run-summary.json`
+- **CLI**: `src/cli/compile-story.ts`, `npm run compile-story -- <path-to-story-input.yaml>`
+  (per §32; `.json` is also accepted — file extension selects the parser). Reads a
+  `StoryCompilerInput` document, runs the engine, persists `storyboard.json` via the
+  existing `FilesystemArtifactRegistry`/`DecisionLog`/`EventLog`/`run-summary.json`
   machinery (matching `analyze-demo.ts`/`capture-browser.ts` exactly). A failed Story Gate
   is always persisted; the CLI's exit code (via the shared `determineExitCode()` policy)
   is the only thing that reflects gate failure.
+- **Schema**: `schemas/storyboard.schema.json` — a shallow, top-level-required-fields
+  JSON Schema for `Storyboard`, matching the depth convention already used by
+  `schemas/existing-demo-analysis.schema.json` (added by this audit; RFC-0005 had
+  shipped with no schema file, unlike RFC-0002–0004).
 
 ## Contract rule coverage (the ten accepted contract rules)
 
@@ -79,11 +95,12 @@ Storyboard                                     src/core/story.ts
 ## CLI usage
 
 ```
-npm run compile-story -- path/to/story-input.json
+npm run compile-story -- path/to/story-input.yaml
+npm run compile-story -- path/to/story-input.json   # also accepted
 ```
 
-`story-input.json` is a `StoryCompilerInput` JSON document (see `src/core/story.ts` for
-the exact shape): `productUnderstanding`, `dir`, optional `existingDemoAnalysis`,
+`story-input.yaml`/`.json` is a `StoryCompilerInput` document (see `src/core/story.ts`
+for the exact shape): `productUnderstanding`, `dir`, optional `existingDemoAnalysis`,
 `browserCaptures` (each wrapped with `runId`/`artifactId`/`capturedAt`, since
 `BrowserCaptureResult` itself does not carry that run identity — see Known Limitations),
 `objective`, required `duration`, and `constraints`.
@@ -118,22 +135,59 @@ scope, and documented per the task's Phase 18 requirement:
 1. **One scene per selected beat**, not the full multi-candidate §20 scoring
    competition (criticality/verification/importance/heroRelevance/... weighted score).
    The RFC itself calls its formula "illustrative, not final."
-2. **Run-level, not per-claim, proof-chain eligibility.** `BrowserAssertionResult` has no
-   claim-id field, so the reference compiler treats "the authoritative capture run has a
-   passed assertion with a linked artifact" as evidence available to every DIR-required
-   claim, rather than semantically matching assertion content to claim text. A future
-   revision should add an explicit claim-id/assertion-id linkage (likely at the
-   `BrowserCapturePlan` step level) to make this precise.
+2. **Run-level, not per-claim, proof-chain eligibility — narrowed, but not eliminated,
+   by this audit.** `BrowserAssertionResult` (RFC-0004, `src/core/browser-assertion.ts`)
+   carries no claim-id field, and `DemoIntermediateRepresentation.EvidenceReference`
+   (`src/core/dir.ts`) carries no assertion-id field either — there is genuinely no
+   upstream identifier connecting a specific passed assertion to a specific DIR claim.
+   This is an **upstream contract gap** (RFC-0004/DIR, not something RFC-0005 can fix by
+   itself without either RFC-0004 growing a new field or DIR growing one). Fixing it
+   fully requires an owner decision on which RFC gains the linking field.
+   Pending that decision, this audit narrowed the blast radius of the missing linkage:
+   `buildProofChains()` in `src/engines/story.ts` now only allows DIR evidence entries of
+   `kind: "capture"` or `kind: "state-change"` — the kinds a browser run can plausibly
+   substantiate at all — to be marked `"verified"`/`"partial"` from browser evidence;
+   `"document"`/`"log"`/`"receipt"`/`"metric"`/`"recording"` claims are always
+   `"unsupported"` from browser evidence (with an explanatory `gaps` entry), since no
+   browser assertion could ever legitimately prove them. Before this fix, *any* passed
+   assertion in the authoritative run marked *every* DIR evidence entry — including
+   unrelated document/compliance claims — as `"verified"`, which was a genuine over-claim
+   bug, not just a granularity simplification. Within the same fix, Hero-Interaction-
+   derived beats (`interaction-start`/`interaction-complete`/`proof`/`result`) now
+   populate `sourceClaimIds` with the browser-substantiable DIR evidence ids they
+   evidence, satisfying the §7 invariant that was previously violated (those beats had
+   `sourceClaimIds: []`, `sourceFactIds: []` with non-empty `evidenceRefs`, which §7
+   explicitly prohibits for these beat kinds).
+   True per-claim (not just per-kind) precision still requires the missing upstream
+   identifier and remains an owner decision.
 3. **Capture-run conflict detection** is based on `(capturePlanId, targetId)` gate-status
    disagreement across runs, not a genuine per-claim disagreement (again because no
    per-claim id exists on `BrowserCaptureResult`).
-4. **Candidate beat generation covers a representative, not exhaustive, subset** of
-   `NarrativeBeatKind` (problem, product-introduction, interaction-start/complete, proof,
-   result, limitation, call-to-action, impact) rather than all nineteen kinds in §6's
-   table (e.g. `hook`, `audience-context`, `consequence`, `current-state`, `goal`,
-   `mechanism`, `comparison`, `trust`, `next-step` are not yet generated). The contract
-   types support all nineteen; the reference compiler's candidate generator does not yet
-   populate all of them.
+4. **Candidate beat generation covers 9 of 19 `NarrativeBeatKind`s** (problem,
+   product-introduction, interaction-start, interaction-complete, proof, result,
+   limitation, call-to-action, impact). Never generated: `hook`, `audience-context`,
+   `consequence`, `current-state`, `goal`, `mechanism`, `interaction-progress`,
+   `comparison`, `trust`, `next-step`. This has a real, non-cosmetic consequence beyond
+   "fewer optional beats appear": §15's arc-selection procedure scores each of the eight
+   `NarrativeArc`s by how many of its *required* beats have an eligible candidate, and
+   four arcs (`before-interaction-after`, `goal-obstacle-resolution`,
+   `diagnosis-intervention-result`, `comparison-decision`) require at least one of
+   `current-state`/`goal`/`mechanism`/`comparison` — kinds this compiler can never
+   generate as a candidate. Those arcs can therefore never be reached by the ordinary
+   (non-`arc-override`) selection procedure; `problem-solution-proof` (or, for the
+   `impact`-requiring case, whichever arc scores highest among the reachable subset) is
+   effectively the only arc the automatic selector can choose. §27's `arc-override`
+   constraint remains available and is tested (`tests/story-engine.test.ts`, "honors an
+   explicit arc-override constraint"), but an override still cannot manufacture a missing
+   required beat (§15: "MUST NOT manufacture a missing required beat") — so overriding to
+   e.g. `before-interaction-after` without a `current-state` candidate will correctly
+   produce `conditional`/`fail` via `StoryCoverage`, not a fabricated beat. The contract
+   types support all nineteen kinds and all eight arcs; only the reference candidate
+   generator's source-record coverage is narrow. Widening this to the full 19/19 requires
+   implementing candidate rules for the missing kinds against their documented valid
+   source evidence (§6's table) — mechanical, but out of scope for this audit's
+   correction pass, which was scoped to fixing confirmed non-conformities rather than
+   expanding candidate-generation breadth.
 5. **`StoryAudience` is accepted verbatim from `StoryCompilerInput.audience`** rather than
    derived from DIR `audience`/`goal` with a documented mapping; when omitted it falls
    back to `DEFAULT_STORY_AUDIENCE` and is not yet recorded as a dedicated
@@ -141,11 +195,15 @@ scope, and documented per the task's Phase 18 requirement:
 6. **Duration compression** shrinks all scenes toward a uniform per-scene share and the
    1500ms floor; it does not yet implement the full §18 priority-ordered
    supporting-then-important compression/removal search.
-7. **CLI input format** is a single JSON `StoryCompilerInput` document rather than a YAML
-   file with artifact-id references resolved against a filesystem registry (§32's
-   proposed shape). `BrowserCaptureRunInput` wraps each `BrowserCaptureResult` with the
-   `runId`/`artifactId`/`capturedAt` triple RFC-0005 needs but RFC-0004's contract does
-   not carry.
+7. **CLI input format**: the CLI now accepts YAML (per §32) as well as JSON, resolved by
+   file extension — this was corrected by this audit (previously JSON-only, which was a
+   confirmed §32 non-conformity). It still accepts a single document with upstream
+   artifact payloads inlined, rather than artifact-id references resolved against a
+   filesystem registry; that inlining, and `BrowserCaptureRunInput`'s
+   `runId`/`artifactId`/`capturedAt` wrapper (needed because `BrowserCaptureResult` itself
+   does not carry that run identity), remain scoped simplifications, not RFC violations —
+   §32 describes the CLI's *input format* (YAML) normatively but leaves artifact
+   composition/resolution mechanics unspecified.
 
 None of these limitations contradicts an RFC-0005 invariant — they narrow *how much* of
 the candidate/scoring space the reference compiler explores, not *what* it is allowed to

@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/dps/storyboard.schema.json",
+  "title": "DPS Storyboard Artifact (RFC-0005)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "sourceArtifactIds",
+    "storyMode",
+    "audience",
+    "objective",
+    "narrativeArc",
+    "beats",
+    "scenes",
+    "sequences",
+    "heroInteraction",
+    "proofChains",
+    "durationBudget",
+    "coverage",
+    "rendererReadiness",
+    "rejectedCandidates",
+    "decisions",
+    "gate",
+    "metrics"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "0.1" },
+    "id": { "type": "string", "minLength": 1 },
+    "sourceArtifactIds": { "type": "array", "items": { "type": "string" } },
+    "storyMode": { "enum": ["promotional", "diagnostic"] },
+    "audience": { "type": "object" },
+    "objective": {
+      "enum": ["explain", "demonstrate", "prove", "compare", "persuade-to-try", "persuade-to-review", "persuade-to-buy", "document"]
+    },
+    "narrativeArc": {
+      "enum": [
+        "problem-solution-proof",
+        "before-interaction-after",
+        "goal-obstacle-resolution",
+        "diagnosis-intervention-result",
+        "workflow-friction-compression",
+        "claim-demonstration-verification",
+        "comparison-decision",
+        "capability-example-impact",
+        null
+      ]
+    },
+    "beats": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["schemaVersion", "id", "kind", "purpose", "audienceTakeaway", "confidence", "importance", "verificationStatus", "mustAppear"],
+        "properties": {
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "importance": { "enum": ["supporting", "important", "critical"] },
+          "verificationStatus": { "enum": ["verified", "partially-verified", "unverified"] }
+        }
+      }
+    },
+    "scenes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["schemaVersion", "id", "beatIds", "primaryBeatId", "sequenceId", "order", "priority"],
+        "properties": {
+          "priority": { "enum": ["supporting", "important", "critical"] }
+        }
+      }
+    },
+    "sequences": { "type": "array" },
+    "heroInteraction": { "type": ["object", "null"] },
+    "proofChains": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "claimId", "evidenceRefIds", "status", "gaps"],
+        "properties": {
+          "status": { "enum": ["verified", "partial", "unsupported"] }
+        }
+      }
+    },
+    "durationBudget": {
+      "type": "object",
+      "required": ["targetMs", "minimumMs", "maximumMs", "allocatedMs", "unallocatedMs", "overBudgetMs", "compressionApplied"]
+    },
+    "coverage": {
+      "type": "object",
+      "required": ["requiredClaimCount", "coveredClaimCount", "criticalClaimCount", "coveredCriticalClaimCount", "sufficient"]
+    },
+    "rendererReadiness": {
+      "type": "object",
+      "required": ["status", "readySceneIds", "recaptureRequiredSceneIds", "blockedSceneIds"],
+      "properties": {
+        "status": { "enum": ["ready", "recapture-required", "blocked"] }
+      }
+    },
+    "rejectedCandidates": { "type": "array" },
+    "decisions": { "type": "array" },
+    "gate": {
+      "type": "object",
+      "required": ["status", "blockingReasons", "warnings", "requirementsBeforeRender"],
+      "properties": {
+        "status": { "enum": ["pass", "conditional", "fail"] }
+      }
+    },
+    "metrics": { "type": "object" }
+  }
+}

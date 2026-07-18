@@ -306,6 +306,19 @@ function generateCandidateBeats(
 
   const allowUnverifiedImpact = input.constraints.find((c) => c.kind === "allow-unverified-impact");
 
+  // §7 invariant: "sourceClaimIds and sourceFactIds MUST NOT both be empty when
+  // evidenceRefs is non-empty" for beat kinds other than next-step/call-to-action. The
+  // Hero-Interaction-derived beats (interaction-start/-complete, proof, result) are
+  // evidenced by browser observations, not directly by a DIR claim id — but every DIR
+  // evidence entry of a browser-substantiable kind (see buildProofChains) is exactly the
+  // set of claims those beats are, collectively, evidence toward. Recording that linkage
+  // here (rather than leaving sourceClaimIds empty) keeps every generated beat contract-
+  // valid and gives downstream proof-chain construction a real, non-fabricated id to cite.
+  const browserSubstantiableClaimIds = input.dir.evidence
+    .filter((e) => e.kind === "capture" || e.kind === "state-change")
+    .map((e) => e.id)
+    .sort((a, b) => a.localeCompare(b));
+
   function reject(
     candidateType: "beat",
     idSuffix: string,
@@ -423,7 +436,7 @@ function generateCandidateBeats(
         kind: "proof",
         purpose: "Substantiate the Hero Interaction with a passed assertion.",
         audienceTakeaway: "The audience sees verifiable proof the interaction worked.",
-        sourceClaimIds: [],
+        sourceClaimIds: browserSubstantiableClaimIds,
         sourceFactIds: [],
         evidenceRefs: [
           evRef({
@@ -589,7 +602,7 @@ function generateCandidateBeats(
       kind,
       purpose: observation.statement,
       audienceTakeaway: observation.statement,
-      sourceClaimIds: [],
+      sourceClaimIds: browserSubstantiableClaimIds,
       sourceFactIds: [],
       evidenceRefs: [
         evRef({
@@ -770,6 +783,19 @@ function presentationIntentFor(kind: NarrativeBeatKind) {
 // §17 proof chains
 // ---------------------------------------------------------------------------
 
+// §17/§8: kinds of DIR EvidenceReference that a *browser* capture run can plausibly
+// substantiate. RFC-0004's BrowserAssertionResult carries no claim identifier (see
+// docs/implementation/rfc-0005-implementation.md "Known Limitations" for the full
+// citation), so the Story Engine cannot link a specific passed assertion to a specific
+// DIR claim by id. Rather than let that missing linkage silently over-claim "verified"
+// status for every DIR evidence entry whenever *any* assertion passes (the bug this
+// function previously had), the compiler narrows eligibility using the one field DIR
+// evidence entries already carry that is meaningful here: `kind`. Only "capture" and
+// "state-change" claims are ones a browser run can, in principle, substantiate; a
+// "document"/"log"/"receipt"/"metric" claim gets no proof chain support from browser
+// evidence, since no upstream field connects that assertion to that specific claim.
+const BROWSER_SUBSTANTIABLE_EVIDENCE_KINDS: ReadonlySet<string> = new Set(["capture", "state-change"]);
+
 function buildProofChains(
   input: StoryCompilerInput,
   scenes: readonly StoryScene[],
@@ -782,14 +808,23 @@ function buildProofChains(
   return [...input.dir.evidence]
     .sort((a, b) => a.id.localeCompare(b.id))
     .map((requirement): ProofChain => {
-      const passedAssertions = authoritative
-        ? authoritative.result.assertions.filter((a) => a.status === "passed" && a.relatedArtifactIds.length > 0)
-        : [];
-      const failedAssertions = authoritative ? authoritative.result.assertions.filter((a) => a.status === "failed") : [];
+      const browserSubstantiable = BROWSER_SUBSTANTIABLE_EVIDENCE_KINDS.has(requirement.kind);
+      const passedAssertions =
+        authoritative && browserSubstantiable
+          ? authoritative.result.assertions.filter((a) => a.status === "passed" && a.relatedArtifactIds.length > 0)
+          : [];
+      const failedAssertions =
+        authoritative && browserSubstantiable ? authoritative.result.assertions.filter((a) => a.status === "failed") : [];
 
       let status: ProofChainStatus;
       const gaps: string[] = [];
-      if (passedAssertions.length > 0 && proofScene && resultScene) {
+      if (!browserSubstantiable) {
+        status = "unsupported";
+        gaps.push(
+          `DIR evidence "${requirement.id}" has kind "${requirement.kind}", which no evidence source in this compilation can substantiate; ` +
+            "RFC-0004 browser assertions carry no per-claim identifier linking them to this specific claim (upstream contract gap — see implementation doc).",
+        );
+      } else if (passedAssertions.length > 0 && proofScene && resultScene) {
         status = "verified";
       } else if (passedAssertions.length > 0 || proofScene) {
         status = "partial";

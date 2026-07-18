@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { load as loadYaml } from "js-yaml";
 import { DecisionLog } from "../core/decision-log.js";
 import { EventLog } from "../core/event-log.js";
 import { FilesystemArtifactRegistry } from "../registry/filesystem-artifact-registry.js";
@@ -10,20 +11,22 @@ import { buildArtifactEnvelope as envelope } from "./artifact-envelope.js";
 import { determineExitCode } from "./exit-code-policy.js";
 
 /**
- * `compile-story` reads a `StoryCompilerInput` from a JSON file. Unlike `analyze-demo`
- * and `capture-browser` (which read a hand-authored YAML describing raw source data),
- * the Story Engine's input is a composition of upstream artifacts (ProductUnderstanding,
- * DIR, ExistingDemoAnalysis, BrowserCaptureResult[]) that are themselves already
- * produced by other CLI commands — so `compile-story` accepts a single JSON document
- * assembling those artifact payloads directly, matching §32's proposed CLI shape while
- * keeping the reference implementation's I/O surface small. YAML composition and
- * artifact-id-based input resolution are left as CLI follow-up work (documented in the
- * implementation doc's Known Limitations).
+ * `compile-story` reads a `StoryCompilerInput` from a file. §32 of RFC-0005 specifies
+ * `npm run compile-story -- <path-to-story-input.yaml>`, matching the YAML-input
+ * convention `analyze-demo`/`capture-browser` already use. The Story Engine's input is a
+ * composition of upstream artifacts (ProductUnderstanding, DIR, ExistingDemoAnalysis,
+ * BrowserCaptureResult[]) that are themselves already produced by other CLI commands, so
+ * in practice that YAML (or JSON) document assembles those artifact payloads directly
+ * rather than describing raw source data — but the file format itself now matches every
+ * other RFC-0002-0004 CLI: `.yaml`/`.yml` is parsed as YAML, anything else (including
+ * `.json`) is parsed as JSON. Artifact-id-based input resolution (reading upstream
+ * artifacts from the filesystem registry by id instead of inlining their payloads) is
+ * left as CLI follow-up work (documented in the implementation doc's Known Limitations).
  */
 async function main(): Promise<void> {
   const inputPath = process.argv[2];
   if (!inputPath) {
-    console.error("Usage: npm run compile-story -- <path-to-story-input.json>");
+    console.error("Usage: npm run compile-story -- <path-to-story-input.yaml>");
     process.exitCode = 1;
     return;
   }
@@ -31,7 +34,8 @@ async function main(): Promise<void> {
   let input: StoryCompilerInput;
   try {
     const raw = await readFile(inputPath, "utf8");
-    input = JSON.parse(raw) as StoryCompilerInput;
+    const isYaml = /\.ya?ml$/i.test(inputPath);
+    input = (isYaml ? loadYaml(raw) : JSON.parse(raw)) as StoryCompilerInput;
   } catch (error) {
     console.error(`Failed to read/parse story input: ${error instanceof Error ? error.message : String(error)}`);
     process.exitCode = 1;

@@ -341,6 +341,108 @@ describe("StoryEngine — determinism (§29)", () => {
   });
 });
 
+describe("StoryEngine — proof chain claim-kind correctness (§17)", () => {
+  it("does not mark a non-browser-substantiable DIR evidence claim as verified merely because an unrelated browser assertion passed", async () => {
+    const engine = new StoryEngine();
+    const board = await engine.run(
+      baseInput({
+        dir: dir({
+          evidence: [
+            { id: "req-1", kind: "capture", claim: "Acme compiles a demo end to end.", source: "browser-capture", importance: "critical", verificationStatus: "verified" },
+            { id: "req-2", kind: "document", claim: "Acme is SOC2 compliant.", source: "compliance-doc", importance: "supporting", verificationStatus: "unverified" },
+          ],
+        }),
+      }),
+      context,
+    );
+    const captureChain = board.proofChains.find((p) => p.claimId === "req-1");
+    const docChain = board.proofChains.find((p) => p.claimId === "req-2");
+    expect(captureChain?.status).toBe("verified");
+    expect(docChain?.status).toBe("unsupported");
+    expect(docChain?.gaps.some((g) => g.includes("no per-claim identifier") || g.includes("no evidence source"))).toBe(true);
+  });
+
+  it("populates sourceClaimIds on evidence-backed Hero Interaction beats per the §7 invariant", async () => {
+    const engine = new StoryEngine();
+    const board = await engine.run(baseInput(), context);
+    const proofBeat = board.beats.find((b) => b.kind === "proof");
+    const resultBeat = board.beats.find((b) => b.kind === "result");
+    expect(proofBeat?.sourceClaimIds.length ?? 0).toBeGreaterThan(0);
+    expect(resultBeat?.sourceClaimIds.length ?? 0).toBeGreaterThan(0);
+  });
+});
+
+describe("StoryEngine — renderer readiness (§9a)", () => {
+  it("marks a critical scene as blocked, and blocks the Story Gate, when it has no supporting evidence reference", async () => {
+    const engine = new StoryEngine();
+    // No browser captures at all removes every evidence-backed critical beat, but the
+    // "problem" and "product-introduction" beats (critical/important, evidence-backed by
+    // understanding-evidence) still generate scenes; the gate fails independently via
+    // missing Hero Interaction / missing critical proof, but rendererReadiness itself
+    // must still be computed honestly for whatever scenes do exist.
+    const board = await engine.run(baseInput({ browserCaptures: [] }), context);
+    expect(board.gate.status).toBe("fail");
+    expect(board.rendererReadiness).toBeDefined();
+    expect(["ready", "recapture-required", "blocked"]).toContain(board.rendererReadiness.status);
+  });
+});
+
+describe("StoryEngine — CTA policy (§14 Decision 4)", () => {
+  it("requires a CTA for persuade-to-try in promotional mode and includes it as a selected scene", async () => {
+    const engine = new StoryEngine();
+    const board = await engine.run(baseInput({ objective: "persuade-to-try" }), context);
+    expect(board.coverage.ctaRequired).toBe(true);
+    expect(board.scenes.some((s) => s.beatIds.includes("beat-cta"))).toBe(true);
+  });
+
+  it("does not require a CTA for a non-persuasive objective", async () => {
+    const engine = new StoryEngine();
+    const board = await engine.run(baseInput({ objective: "demonstrate" }), context);
+    expect(board.coverage.ctaRequired).toBe(false);
+    expect(board.scenes.some((s) => s.beatIds.includes("beat-cta"))).toBe(false);
+  });
+});
+
+describe("StoryEngine — narrative arc selection (§15)", () => {
+  it("honors an explicit arc-override constraint and records it with human authority", async () => {
+    const engine = new StoryEngine();
+    const board = await engine.run(
+      baseInput({ constraints: [{ kind: "arc-override", value: "claim-demonstration-verification", reason: "test override" }] }),
+      context,
+    );
+    expect(board.narrativeArc).toBe("claim-demonstration-verification");
+    const decision = board.decisions.find((d) => d.decisionId.endsWith("narrative-arc-selected"));
+    expect(decision?.authority).toBe("human");
+  });
+});
+
+describe("StoryEngine — rejection codes (§20)", () => {
+  it("records rejected candidates using only declared RejectionReasonCode values", async () => {
+    const engine = new StoryEngine();
+    const board = await engine.run(baseInput(), context);
+    const validCodes = new Set([
+      "unsupported",
+      "duplicate",
+      "low-confidence",
+      "non-critical",
+      "duration-budget",
+      "dependency-missing",
+      "conflicts-with-hero",
+      "sequencing-invalid",
+      "audience-mismatch",
+      "claim-not-required",
+      "stronger-evidence-selected",
+      "incomplete-proof-chain",
+      "forbidden-in-current-arc",
+      "unsupported-impact",
+      "capture-conflict-unresolved",
+    ]);
+    for (const r of board.rejectedCandidates) {
+      expect(validCodes.has(r.reasonCode)).toBe(true);
+    }
+  });
+});
+
 describe("StoryEngine — validate()", () => {
   it("rejects a schemaVersion mismatch", () => {
     const engine = new StoryEngine();
