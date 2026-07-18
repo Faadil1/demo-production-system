@@ -18,7 +18,7 @@
 
 - [x] Understanding Engine (RFC-0002 Product Understanding Contract)
 - [x] Planning Engine (consumes Product Understanding Gate + selection)
-- [ ] Story Engine (RFC-0005 specification accepted for implementation; implementation not started)
+- [x] Story Engine (RFC-0005 — reference implementation complete: contracts, deterministic compiler, `compile-story` CLI; documented scope simplifications in `docs/implementation/rfc-0005-implementation.md`)
 - [x] Playwright browser adapter (RFC-0004 Browser Evidence Capture — reference implementation complete; extension adapters pending)
 - [ ] Remotion renderer adapter
 - [ ] MP4 export
