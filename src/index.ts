@@ -7,3 +7,4 @@ export * from "./core/events.js";
 export * from "./core/dir.js";
 export * from "./core/execution-plan.js";
 export { createExecutionPlan } from "./planning/planner.js";
+export * from "./orchestration/index.js";
