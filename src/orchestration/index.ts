@@ -1,8 +1,10 @@
 /**
- * RFC-0008: Sequential Execution Orchestration
+ * RFC-0008 & RFC-0009: Sequential Execution Orchestration
  */
 
 export {
+  type StageArtifact,
+  type CompletedStageExecution,
   type StageExecutionInput,
   type StageExecutionResult,
   type StageExecutor,
