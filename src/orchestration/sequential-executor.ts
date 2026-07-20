@@ -1,7 +1,8 @@
 /**
- * RFC-0008: Sequential Execution Orchestration
+ * RFC-0008 & RFC-0010: Sequential Execution Orchestration with Artifact Input Bindings
  *
- * Minimal sequential execution orchestrator with fail-fast semantics.
+ * RFC-0008: Minimal sequential execution orchestrator with fail-fast semantics.
+ * RFC-0010: Stage artifact input bindings for caller-controlled artifact visibility.
  * No retries, persistence, replay, resume, parallelism, gates, or enrichment.
  */
 
@@ -18,12 +19,31 @@ export type StageArtifact = {
 };
 
 /**
- * Input to each executor invocation.
- * Executor does not receive upstream results or outputs.
+ * Caller-provided binding of artifacts from upstream stages (RFC-0010).
+ * Each binding references a single source stage whose captured artifacts are visible to a target.
+ */
+export type ArtifactInputBinding = {
+  readonly sourceStageId: string;
+};
+
+/**
+ * Map of target stage IDs to arrays of artifact input bindings (RFC-0010).
+ * Specifies which upstream stages' artifacts are visible to each target stage.
+ * Optional; absence means no artifact bindings (backward compatible with RFC-0008/RFC-0009).
+ */
+export type ArtifactInputBindings = Readonly<
+  Record<string, readonly ArtifactInputBinding[]>
+>;
+
+/**
+ * Input to each executor invocation (RFC-0008 & RFC-0010).
+ * Executor does not receive upstream results or outputs except through providedArtifacts (RFC-0010).
+ * providedArtifacts is only present if artifacts are bound to this target stage.
  */
 export type StageExecutionInput = {
   readonly stageId: string;
   readonly stageKind: string;
+  readonly providedArtifacts?: readonly StageArtifact[];
 };
 
 /**
@@ -57,26 +77,30 @@ export type StageExecutor = (
 ) => Promise<StageExecutionResult>;
 
 /**
- * Complete input to orchestrator.
- * All three components must be provided; orchestrator does not modify them.
+ * Complete input to orchestrator (RFC-0008 & RFC-0010).
+ * plan, stageDefinitions, and executors must be provided; orchestrator does not modify them.
+ * artifactInputBindings is optional; when absent, no artifacts are bound (backward compatible).
  */
 export type SequentialExecutionInput = {
   readonly plan: ExecutionPlan;
   readonly stageDefinitions: readonly StageDefinition[];
   readonly executors: Readonly<Record<string, StageExecutor>>;
+  readonly artifactInputBindings?: ArtifactInputBindings;
 };
 
 /**
- * Failure reason codes (5 total).
+ * Failure reason codes (6 total, extended by RFC-0010).
  * Reason is always one of these; no executor-provided text.
  * Details string is stable and orchestrator-controlled.
+ * RFC-0008 originally defined 5 codes; RFC-0010 adds INVALID_ARTIFACT_BINDINGS.
  */
 export type SequentialExecutionFailureReason =
   | 'DUPLICATE_STAGE_DEFINITION'
   | 'MISSING_STAGE_DEFINITION'
   | 'MISSING_EXECUTOR'
   | 'EXECUTOR_FAILED'
-  | 'EXECUTOR_THREW';
+  | 'EXECUTOR_THREW'
+  | 'INVALID_ARTIFACT_BINDINGS';
 
 /**
  * Complete output from orchestration (RFC-0009 extended).
@@ -100,6 +124,26 @@ export type SequentialExecutionResult =
       readonly details: string;
     };
 
+/**
+ * Internal representation of normalized artifact input bindings (RFC-0010).
+ * Produced during preflight validation; never read from caller input after creation.
+ */
+type NormalizedArtifactInputBindings = readonly {
+  readonly targetStageId: string;
+  readonly sourceStageIds: readonly string[];
+}[];
+
+/**
+ * Compute all transitive upstream stage IDs from ExecutionPlan topology (RFC-0010).
+ * PlannedStage.upstreams is the only topology authority for binding validity.
+ */
+function computeUpstreamAncestors(
+  stageId: string,
+  plan: ExecutionPlan
+): Set<string> {
+  const plannedStage = plan.stages.find((stage) => stage.stageId === stageId);
+  return new Set(plannedStage?.upstreams ?? []);
+}
 /**
  * Validate executor artifacts and create shallow copies for public result.
  * Returns error message if validation fails, otherwise returns orchestrator-owned
@@ -181,6 +225,250 @@ function validateAndCopyArtifacts(
   return { artifacts: copied };
 }
 
+type ArtifactBindingValidationFailure = {
+  readonly failedStageId: string;
+  readonly details: string;
+};
+
+function invalidArtifactBindings(
+  failedStageId: string,
+  details: string
+): { readonly error: ArtifactBindingValidationFailure } {
+  return { error: { failedStageId, details } };
+}
+
+function validateArtifactBindings(
+  bindings: unknown,
+  plan: ExecutionPlan
+): {
+  readonly normalized?: NormalizedArtifactInputBindings;
+  readonly error?: ArtifactBindingValidationFailure;
+} {
+  if (bindings === undefined) {
+    return { normalized: [] };
+  }
+
+  if (!bindings || typeof bindings !== 'object') {
+    return invalidArtifactBindings(
+      'unknown',
+      'Artifact input bindings must be an object when provided.'
+    );
+  }
+
+  let ownKeys: (string | symbol)[];
+  try {
+    ownKeys = Reflect.ownKeys(bindings);
+  } catch {
+    return invalidArtifactBindings(
+      'unknown',
+      'Artifact input bindings own-key inspection failed.'
+    );
+  }
+
+  for (const key of ownKeys) {
+    if (typeof key === 'symbol') {
+      return invalidArtifactBindings(
+        'unknown',
+        'Artifact input bindings must not contain symbol keys.'
+      );
+    }
+  }
+
+  let targetKeys: string[];
+  try {
+    targetKeys = Object.keys(bindings);
+  } catch {
+    return invalidArtifactBindings(
+      'unknown',
+      'Artifact input bindings enumerable-key inspection failed.'
+    );
+  }
+
+  const planStageIds = new Set(plan.stages.map((stage) => stage.stageId));
+  const normalizedMap = new Map<
+    string,
+    { readonly targetStageId: string; readonly sourceStageIds: Set<string> }
+  >();
+
+  for (const targetStageId of targetKeys) {
+    if (!planStageIds.has(targetStageId)) {
+      return invalidArtifactBindings(
+        targetStageId,
+        `Artifact input bindings target '${targetStageId}' is not in the execution plan.`
+      );
+    }
+
+    let targetValue: unknown;
+    try {
+      targetValue = (bindings as Record<string, unknown>)[targetStageId];
+    } catch {
+      return invalidArtifactBindings(
+        targetStageId,
+        `Artifact input bindings target '${targetStageId}' could not be read.`
+      );
+    }
+
+    if (!Array.isArray(targetValue)) {
+      return invalidArtifactBindings(
+        targetStageId,
+        `Artifact input bindings target '${targetStageId}' must be an array.`
+      );
+    }
+
+    let targetLength: number;
+    try {
+      targetLength = targetValue.length;
+    } catch {
+      return invalidArtifactBindings(
+        targetStageId,
+        `Artifact input bindings target '${targetStageId}' array could not be read.`
+      );
+    }
+
+    const sourceStageIds = new Set<string>();
+    normalizedMap.set(targetStageId, { targetStageId, sourceStageIds });
+
+    for (let index = 0; index < targetLength; index += 1) {
+      let bindingEntry: unknown;
+      try {
+        bindingEntry = targetValue[index];
+      } catch {
+        return invalidArtifactBindings(
+          targetStageId,
+          `Artifact input binding ${index} for target '${targetStageId}' could not be read.`
+        );
+      }
+
+      if (!bindingEntry || typeof bindingEntry !== 'object') {
+        return invalidArtifactBindings(
+          targetStageId,
+          `Artifact input binding ${index} for target '${targetStageId}' must be an object.`
+        );
+      }
+
+      let sourceStageId: unknown;
+      try {
+        sourceStageId = (bindingEntry as Record<string, unknown>).sourceStageId;
+      } catch {
+        return invalidArtifactBindings(
+          targetStageId,
+          `Artifact input binding ${index} for target '${targetStageId}' sourceStageId could not be read.`
+        );
+      }
+
+      if (typeof sourceStageId !== 'string') {
+        return invalidArtifactBindings(
+          targetStageId,
+          `Artifact input binding ${index} for target '${targetStageId}' sourceStageId must be a string.`
+        );
+      }
+
+      if (!planStageIds.has(sourceStageId)) {
+        return invalidArtifactBindings(
+          targetStageId,
+          `Artifact input binding for target '${targetStageId}' references unknown source '${sourceStageId}'.`
+        );
+      }
+
+      if (sourceStageId === targetStageId) {
+        return invalidArtifactBindings(
+          targetStageId,
+          `Artifact input binding for target '${targetStageId}' must not reference itself.`
+        );
+      }
+
+      const ancestors = computeUpstreamAncestors(targetStageId, plan);
+      if (!ancestors.has(sourceStageId)) {
+        return invalidArtifactBindings(
+          targetStageId,
+          `Artifact input binding for target '${targetStageId}' references non-upstream source '${sourceStageId}'.`
+        );
+      }
+
+      if (sourceStageIds.has(sourceStageId)) {
+        return invalidArtifactBindings(
+          targetStageId,
+          `Artifact input binding for target '${targetStageId}' duplicates source '${sourceStageId}'.`
+        );
+      }
+
+      sourceStageIds.add(sourceStageId);
+    }
+  }
+
+  const normalizedArray: {
+    readonly targetStageId: string;
+    readonly sourceStageIds: readonly string[];
+  }[] = [];
+  for (const stage of plan.stages) {
+    const entry = normalizedMap.get(stage.stageId);
+    if (entry) {
+      const sourceStageIds: string[] = [];
+      for (const planStage of plan.stages) {
+        if (entry.sourceStageIds.has(planStage.stageId)) {
+          sourceStageIds.push(planStage.stageId);
+        }
+      }
+      normalizedArray.push({
+        targetStageId: entry.targetStageId,
+        sourceStageIds,
+      });
+    }
+  }
+
+  return { normalized: normalizedArray };
+}
+
+/**
+ * Resolve artifact input bindings at runtime (RFC-0010 section 11).
+ * For a given target stage, collect all artifacts from bound sources in order.
+ * Returns providedArtifacts array (shallow copies) or undefined if no sources bound.
+ */
+function resolveArtifactInputs(
+  targetStageId: string,
+  normalizedBindings: NormalizedArtifactInputBindings,
+  completedStages: CompletedStageExecution[]
+): readonly StageArtifact[] | undefined {
+  // Find binding entry for this target
+  const bindingEntry = normalizedBindings.find(
+    (e) => e.targetStageId === targetStageId
+  );
+
+  // If no binding entry, omit providedArtifacts
+  if (!bindingEntry) {
+    return undefined;
+  }
+
+  // Build map of completed stages for fast lookup
+  const completedByStageId = new Map<string, CompletedStageExecution>();
+  for (const completed of completedStages) {
+    completedByStageId.set(completed.stageId, completed);
+  }
+
+  // Resolve each source in order
+  const provided: StageArtifact[] = [];
+  for (const sourceStageId of bindingEntry.sourceStageIds) {
+    const completed = completedByStageId.get(sourceStageId);
+
+    // Missing completed source is a runtime failure (RFC-0010 section 11, line 155)
+    if (!completed) {
+      return undefined; // Signal that this stage should fail with EXECUTOR_FAILED
+    }
+
+    // Copy all artifacts from this source in order (RFC-0009 captured order)
+    for (const artifact of completed.artifacts) {
+      provided.push({
+        artifactId: artifact.artifactId,
+        artifactKind: artifact.artifactKind,
+        uri: artifact.uri,
+      });
+    }
+  }
+
+  // Return array (may be empty if sources are bound but emitted no artifacts)
+  return provided;
+}
+
 /**
  * Sequential execution orchestrator.
  *
@@ -214,7 +502,7 @@ function validateAndCopyArtifacts(
 export async function executeSequentialPlan(
   input: SequentialExecutionInput
 ): Promise<SequentialExecutionResult> {
-  const { plan, stageDefinitions, executors } = input;
+  const { plan, stageDefinitions, executors, artifactInputBindings } = input;
 
   // Validation: Detect duplicate stageIds before any executor invocation
   const definitionsByStageId = new Map<string, StageDefinition>();
@@ -230,6 +518,19 @@ export async function executeSequentialPlan(
     }
     definitionsByStageId.set(def.stageId, def);
   }
+
+  // RFC-0010: Preflight validation of artifact input bindings before any executor invocation
+  const bindingsValidation = validateArtifactBindings(artifactInputBindings, plan);
+  if (bindingsValidation.error) {
+    return {
+      status: 'FAILED',
+      completedStages: [],
+      failedStageId: bindingsValidation.error.failedStageId,
+      reason: 'INVALID_ARTIFACT_BINDINGS',
+      details: bindingsValidation.error.details,
+    };
+  }
+  const normalizedBindings = bindingsValidation.normalized!;
 
   const completedStages: CompletedStageExecution[] = [];
 
@@ -263,8 +564,36 @@ export async function executeSequentialPlan(
     }
     const executor = executors[stageKind] as StageExecutor;
 
-    // Step 3: Invoke executor
-    const input: StageExecutionInput = { stageId, stageKind };
+    // RFC-0010: Resolve artifact inputs from bound upstream sources
+    const providedArtifacts = resolveArtifactInputs(
+      stageId,
+      normalizedBindings,
+      completedStages
+    );
+
+    // If resolution returned undefined due to missing completed source, fail
+    if (
+      providedArtifacts === undefined &&
+      normalizedBindings.some((e) => e.targetStageId === stageId)
+    ) {
+      // This target has bindings but a required source is missing
+      // This should not happen in normal execution (all upstreams should complete first)
+      // but RFC-0010 section 11 requires us to fail with EXECUTOR_FAILED
+      return {
+        status: 'FAILED',
+        completedStages,
+        failedStageId: stageId,
+        reason: 'EXECUTOR_FAILED',
+        details: 'Required upstream source artifact not available.',
+      };
+    }
+
+    // Step 3: Invoke executor with optional providedArtifacts
+    const executionInput: StageExecutionInput =
+      providedArtifacts !== undefined
+        ? { stageId, stageKind, providedArtifacts }
+        : { stageId, stageKind };
+    const input = executionInput;
 
     let result: StageExecutionResult;
     try {
