@@ -8,6 +8,16 @@
 import { ExecutionPlan, StageDefinition } from '../core/execution-plan.js';
 
 /**
+ * Immutable reference to a stage output artifact (RFC-0009).
+ * Executor provides these; orchestrator collects and exposes them.
+ */
+export type StageArtifact = {
+  readonly artifactId: string;
+  readonly artifactKind: string;
+  readonly uri: string;
+};
+
+/**
  * Input to each executor invocation.
  * Executor does not receive upstream results or outputs.
  */
@@ -17,13 +27,26 @@ export type StageExecutionInput = {
 };
 
 /**
- * Output from each executor.
- * Executor provides only status, no reason text or payload.
+ * Output from each executor (RFC-0009 extended).
+ * SUCCEEDED must include artifacts array (may be empty).
+ * FAILED has no artifacts (fail-fast semantics).
  * Orchestrator normalizes all failures.
  */
 export type StageExecutionResult =
-  | { readonly status: 'SUCCEEDED' }
+  | {
+      readonly status: 'SUCCEEDED';
+      readonly artifacts: readonly StageArtifact[];
+    }
   | { readonly status: 'FAILED' };
+
+/**
+ * Successful stage execution with collected artifacts (RFC-0009).
+ * Single source of truth for stage completion in orchestrator result.
+ */
+export type CompletedStageExecution = {
+  readonly stageId: string;
+  readonly artifacts: readonly StageArtifact[];
+};
 
 /**
  * Executor function type.
@@ -56,25 +79,107 @@ export type SequentialExecutionFailureReason =
   | 'EXECUTOR_THREW';
 
 /**
- * Complete output from orchestration.
- * SUCCEEDED: all stages executed successfully.
+ * Complete output from orchestration (RFC-0009 extended).
+ * SUCCEEDED: all stages executed successfully with collected artifacts.
  * FAILED: execution stopped after first failure.
  *
  * completedStages contains only successful stages (failed stage is excluded).
+ * Each CompletedStageExecution includes stageId and collected artifacts.
  * failedStageId identifies which stage caused failure (not in completedStages).
  */
 export type SequentialExecutionResult =
   | {
       readonly status: 'SUCCEEDED';
-      readonly completedStages: readonly string[];
+      readonly completedStages: readonly CompletedStageExecution[];
     }
   | {
       readonly status: 'FAILED';
-      readonly completedStages: readonly string[];
+      readonly completedStages: readonly CompletedStageExecution[];
       readonly failedStageId: string;
       readonly reason: SequentialExecutionFailureReason;
       readonly details: string;
     };
+
+/**
+ * Validate executor artifacts and create shallow copies for public result.
+ * Returns error message if validation fails, otherwise returns orchestrator-owned
+ * shallow copies of artifacts (not references to executor's objects).
+ *
+ * Frozen validation rules (RFC-0009):
+ * - artifacts must be an array
+ * - each entry must be a non-null object
+ * - each entry must have artifactId, artifactKind, uri as strings
+ * - empty strings are accepted
+ * - duplicates are accepted
+ * - extra fields are stripped
+ *
+ * Returns deep error description for malformed structures,
+ * stable error message for overall shape issues.
+ */
+function validateAndCopyArtifacts(
+  artifacts: unknown
+): {
+  error?: string;
+  artifacts: readonly StageArtifact[];
+} {
+  // Check artifacts is present and an array
+  if (!Array.isArray(artifacts)) {
+    return {
+      error: 'Executor returned an invalid result.',
+      artifacts: [],
+    };
+  }
+
+  // Validate each artifact entry and create shallow copies
+  const copied: StageArtifact[] = [];
+
+  for (const entry of artifacts) {
+    // Must be non-null object
+    if (!entry || typeof entry !== 'object') {
+      return {
+        error: 'Executor returned artifacts with invalid structure.',
+        artifacts: [],
+      };
+    }
+
+    const artifact = entry as Record<string, unknown>;
+
+    // Must have all three required string fields
+    const artifactId = artifact.artifactId;
+    const artifactKind = artifact.artifactKind;
+    const uri = artifact.uri;
+
+    if (typeof artifactId !== 'string') {
+      return {
+        error: 'Executor returned artifacts with invalid structure.',
+        artifacts: [],
+      };
+    }
+
+    if (typeof artifactKind !== 'string') {
+      return {
+        error: 'Executor returned artifacts with invalid structure.',
+        artifacts: [],
+      };
+    }
+
+    if (typeof uri !== 'string') {
+      return {
+        error: 'Executor returned artifacts with invalid structure.',
+        artifacts: [],
+      };
+    }
+
+    // Create shallow copy with only the three public fields
+    copied.push({
+      artifactId,
+      artifactKind,
+      uri,
+    });
+  }
+
+  return { artifacts: copied };
+}
 
 /**
  * Sequential execution orchestrator.
@@ -126,7 +231,7 @@ export async function executeSequentialPlan(
     definitionsByStageId.set(def.stageId, def);
   }
 
-  const completedStages: string[] = [];
+  const completedStages: CompletedStageExecution[] = [];
 
   // Execute each stage in topological order
   for (const plannedStage of plan.stages) {
@@ -176,8 +281,78 @@ export async function executeSequentialPlan(
     }
 
     // Step 4: Validate and normalize executor result
-    if (!result || typeof result !== 'object') {
-      // Malformed: not an object
+    // Wrap inspection and validation in separate boundary to catch property access throws
+    try {
+      if (!result || typeof result !== 'object') {
+        // Malformed: not an object
+        return {
+          status: 'FAILED',
+          completedStages,
+          failedStageId: stageId,
+          reason: 'EXECUTOR_FAILED',
+          details: 'Executor returned an invalid result.',
+        };
+      }
+
+      const resultStatus = (result as Record<string, unknown>).status;
+
+      if (resultStatus === 'SUCCEEDED') {
+        // Validate and collect artifacts (RFC-0009)
+        const artifactsValidation = validateAndCopyArtifacts(
+          (result as Record<string, unknown>).artifacts
+        );
+
+        if (artifactsValidation.error) {
+          return {
+            status: 'FAILED',
+            completedStages,
+            failedStageId: stageId,
+            reason: 'EXECUTOR_FAILED',
+            details: artifactsValidation.error,
+          };
+        }
+
+        // Success: add to completedStages with collected artifacts, continue
+        completedStages.push({
+          stageId,
+          artifacts: artifactsValidation.artifacts,
+        });
+        continue;
+      }
+
+      if (resultStatus === 'FAILED') {
+        // FAILED result must not carry artifacts (RFC-0009)
+        const failedResult = result as Record<string, unknown>;
+        if ('artifacts' in failedResult) {
+          return {
+            status: 'FAILED',
+            completedStages,
+            failedStageId: stageId,
+            reason: 'EXECUTOR_FAILED',
+            details: 'Executor returned an invalid result.',
+          };
+        }
+
+        // Executor returned FAILED
+        return {
+          status: 'FAILED',
+          completedStages,
+          failedStageId: stageId,
+          reason: 'EXECUTOR_FAILED',
+          details: 'Executor reported failure.',
+        };
+      }
+
+      // Malformed: status is neither SUCCEEDED nor FAILED
+      return {
+        status: 'FAILED',
+        completedStages,
+        failedStageId: stageId,
+        reason: 'EXECUTOR_FAILED',
+        details: 'Executor returned an invalid result.',
+      };
+    } catch (error) {
+      // Inspection-time exception: any property access, getter, proxy trap, or validation threw
       return {
         status: 'FAILED',
         completedStages,
@@ -186,34 +361,6 @@ export async function executeSequentialPlan(
         details: 'Executor returned an invalid result.',
       };
     }
-
-    const resultStatus = (result as Record<string, unknown>).status;
-
-    if (resultStatus === 'SUCCEEDED') {
-      // Success: add to completedStages, continue
-      completedStages.push(stageId);
-      continue;
-    }
-
-    if (resultStatus === 'FAILED') {
-      // Executor returned FAILED
-      return {
-        status: 'FAILED',
-        completedStages,
-        failedStageId: stageId,
-        reason: 'EXECUTOR_FAILED',
-        details: 'Executor reported failure.',
-      };
-    }
-
-    // Malformed: status is neither SUCCEEDED nor FAILED
-    return {
-      status: 'FAILED',
-      completedStages,
-      failedStageId: stageId,
-      reason: 'EXECUTOR_FAILED',
-      details: 'Executor returned an invalid result.',
-    };
   }
 
   // All stages succeeded
